@@ -1,0 +1,25 @@
+.DS_Store
+.idea/
+.vscode/
+
+# Java
+target/
+*.class
+*.log
+
+# Node
+node_modules/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Env
+.env
+.env.*
+
+# OS temp files
+Thumbs.db
