@@ -10,6 +10,7 @@ public record DoctorRequest(
     @NotBlank @Size(max = 50) String name,
     @NotBlank @Size(max = 50) String title,
     @NotBlank @Size(max = 100) String specialty,
+    @NotBlank @Size(max = 50) String workTimeSlot,
     @NotBlank @Size(max = 255) String shortIntro,
     @NotBlank @Size(max = 2000) String detailIntro
 ) {

@@ -162,11 +162,21 @@ public class AdminCatalogService {
             throw new BadRequestException("医生所属诊室与医院不匹配");
         }
 
+        String workTimeSlot = request.workTimeSlot().trim();
+        boolean hasConflict = doctor.getId() == null
+            ? doctorRepository.existsByRoomIdAndWorkTimeSlot(room.getId(), workTimeSlot)
+            : doctorRepository.existsByRoomIdAndWorkTimeSlotAndIdNot(room.getId(), workTimeSlot, doctor.getId());
+
+        if (hasConflict) {
+            throw new BadRequestException("同一诊室同一时间段不能安排两位医生上班");
+        }
+
         doctor.setHospital(hospital);
         doctor.setRoom(room);
         doctor.setName(request.name().trim());
         doctor.setTitle(request.title().trim());
         doctor.setSpecialty(request.specialty().trim());
+        doctor.setWorkTimeSlot(workTimeSlot);
         doctor.setShortIntro(request.shortIntro().trim());
         doctor.setDetailIntro(request.detailIntro().trim());
     }
@@ -231,6 +241,7 @@ public class AdminCatalogService {
             doctor.getName(),
             doctor.getTitle(),
             doctor.getSpecialty(),
+            doctor.getWorkTimeSlot(),
             doctor.getShortIntro(),
             doctor.getDetailIntro(),
             doctor.getCreatedAt(),

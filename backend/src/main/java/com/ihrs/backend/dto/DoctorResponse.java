@@ -11,6 +11,7 @@ public record DoctorResponse(
     String name,
     String title,
     String specialty,
+    String workTimeSlot,
     String shortIntro,
     String detailIntro,
     LocalDateTime createdAt,

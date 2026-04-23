@@ -9,7 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
@@ -21,13 +21,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 @Getter
 @Setter
 @Entity
-@Table(
-    name = "doctor",
-    uniqueConstraints = {
-        @UniqueConstraint(name = "uk_doctor_room_work_time", columnNames = {"room_id", "work_time_slot"})
-    }
-)
-public class Doctor {
+@Table(name = "appointment")
+public class Appointment {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -43,23 +38,28 @@ public class Doctor {
     @OnDelete(action = OnDeleteAction.CASCADE)
     private ClinicRoom room;
 
-    @Column(nullable = false, length = 50)
-    private String name;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "doctor_id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
+    private Doctor doctor;
+
+    @Column(name = "patient_name", nullable = false, length = 50)
+    private String patientName;
+
+    @Column(name = "patient_phone", nullable = false, length = 30)
+    private String patientPhone;
+
+    @Column(nullable = false)
+    private LocalDate appointmentDate;
 
     @Column(nullable = false, length = 50)
-    private String title;
+    private String timeSlot;
 
-    @Column(nullable = false, length = 100)
-    private String specialty;
+    @Column(nullable = false, length = 30)
+    private String status;
 
-    @Column(name = "work_time_slot", length = 50)
-    private String workTimeSlot;
-
-    @Column(name = "short_intro", nullable = false, length = 255)
-    private String shortIntro;
-
-    @Column(name = "detail_intro", nullable = false, length = 2000)
-    private String detailIntro;
+    @Column(length = 500)
+    private String symptom;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -9,4 +9,8 @@ public interface DoctorRepository extends JpaRepository<Doctor, Long> {
     List<Doctor> findByHospitalId(Long hospitalId);
 
     List<Doctor> findByRoomId(Long roomId);
+
+    boolean existsByRoomIdAndWorkTimeSlot(Long roomId, String workTimeSlot);
+
+    boolean existsByRoomIdAndWorkTimeSlotAndIdNot(Long roomId, String workTimeSlot, Long id);
 }
