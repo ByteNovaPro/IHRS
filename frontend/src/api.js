@@ -154,12 +154,31 @@ export function getAppointmentQuota({ doctorId, appointmentDate, timeSlot }) {
   return request(`/api/appointments/quota?${query.toString()}`);
 }
 
+export function getAppointmentQuotaCalendar({ doctorIds, startDate, endDate }) {
+  const query = new URLSearchParams({
+    startDate,
+    endDate,
+  });
+
+  doctorIds.forEach((doctorId) => {
+    query.append("doctorIds", String(doctorId));
+  });
+
+  return request(`/api/appointments/quota-calendar?${query.toString()}`);
+}
+
 export function listAdminAppointments() {
   return request("/api/admin/appointments");
 }
 
 export function cancelAppointment(id) {
   return request(`/api/admin/appointments/${id}/cancel`, {
+    method: "PUT",
+  });
+}
+
+export function cancelMyAppointment(id) {
+  return request(`/api/appointments/${id}/cancel`, {
     method: "PUT",
   });
 }

@@ -1,21 +1,28 @@
 package com.ihrs.backend.service;
 
 import com.ihrs.backend.dto.AppointmentRequest;
+import com.ihrs.backend.dto.AppointmentQuotaCalendarResponse;
 import com.ihrs.backend.dto.AppointmentQuotaResponse;
 import com.ihrs.backend.dto.AppointmentResponse;
 import com.ihrs.backend.entity.Appointment;
 import com.ihrs.backend.entity.ClinicRoom;
 import com.ihrs.backend.entity.Doctor;
 import com.ihrs.backend.entity.Hospital;
+import com.ihrs.backend.entity.UserAccount;
 import com.ihrs.backend.exception.BadRequestException;
 import com.ihrs.backend.exception.ResourceNotFoundException;
 import com.ihrs.backend.repository.AppointmentRepository;
 import com.ihrs.backend.repository.ClinicRoomRepository;
 import com.ihrs.backend.repository.DoctorRepository;
 import com.ihrs.backend.repository.HospitalRepository;
+import com.ihrs.backend.repository.UserAccountRepository;
 import com.ihrs.backend.security.AuthContext;
+import com.ihrs.backend.dto.SessionUser;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,17 +38,20 @@ public class AppointmentService {
     private final HospitalRepository hospitalRepository;
     private final ClinicRoomRepository clinicRoomRepository;
     private final DoctorRepository doctorRepository;
+    private final UserAccountRepository userAccountRepository;
 
     public AppointmentService(
         AppointmentRepository appointmentRepository,
         HospitalRepository hospitalRepository,
         ClinicRoomRepository clinicRoomRepository,
-        DoctorRepository doctorRepository
+        DoctorRepository doctorRepository,
+        UserAccountRepository userAccountRepository
     ) {
         this.appointmentRepository = appointmentRepository;
         this.hospitalRepository = hospitalRepository;
         this.clinicRoomRepository = clinicRoomRepository;
         this.doctorRepository = doctorRepository;
+        this.userAccountRepository = userAccountRepository;
     }
 
     @Transactional(readOnly = true)
@@ -57,8 +67,23 @@ public class AppointmentService {
 
     @Transactional(readOnly = true)
     public List<AppointmentResponse> listAppointmentsByPhone(String patientPhone) {
+        SessionUser currentUser = AuthContext.get();
         String currentPhone = currentPatientPhone(patientPhone);
-        return appointmentRepository.findByPatientPhoneOrderByAppointmentDateDescIdDesc(currentPhone).stream()
+        Long currentUserId = currentUserId(currentUser);
+
+        Stream<Appointment> appointments =
+            currentUserId != null
+                ? Stream.concat(
+                    appointmentRepository.findByUserIdOrderByAppointmentDateDescIdDesc(currentUserId).stream(),
+                    appointmentRepository.findByUserIsNullAndPatientPhoneOrderByAppointmentDateDescIdDesc(currentPhone).stream()
+                )
+                : appointmentRepository.findByPatientPhoneOrderByAppointmentDateDescIdDesc(currentPhone).stream();
+
+        return appointments
+            .sorted(
+                Comparator.comparing(Appointment::getAppointmentDate).reversed()
+                    .thenComparing(Appointment::getId, Comparator.reverseOrder())
+            )
             .map(this::toResponse)
             .toList();
     }
@@ -81,9 +106,12 @@ public class AppointmentService {
         }
 
         String patientPhone = currentPatientPhone(request.patientPhone());
+        UserAccount currentUser = currentUserAccount();
+        Long currentUserId = currentUser == null ? null : currentUser.getId();
         String normalizedTimeSlot = request.timeSlot().trim();
 
-        if (appointmentRepository.existsByPatientPhoneAndDoctorIdAndAppointmentDateAndTimeSlotAndStatus(
+        if (appointmentRepository.existsReservedConflictForUser(
+            currentUserId,
             patientPhone,
             doctor.getId(),
             request.appointmentDate(),
@@ -102,6 +130,7 @@ public class AppointmentService {
         appointment.setHospital(hospital);
         appointment.setRoom(room);
         appointment.setDoctor(doctor);
+        appointment.setUser(currentUser);
         appointment.setPatientName(request.patientName().trim());
         appointment.setPatientPhone(patientPhone);
         appointment.setAppointmentDate(request.appointmentDate());
@@ -124,6 +153,62 @@ public class AppointmentService {
             Math.max(SLOT_CAPACITY - reservedCount, 0),
             SLOT_CAPACITY
         );
+    }
+
+    @Transactional(readOnly = true)
+    public AppointmentQuotaCalendarResponse getQuotaCalendar(
+        List<Long> doctorIds,
+        java.time.LocalDate startDate,
+        java.time.LocalDate endDate
+    ) {
+        if (doctorIds == null || doctorIds.isEmpty()) {
+            throw new BadRequestException("请至少选择一位医生");
+        }
+
+        if (startDate == null || endDate == null || endDate.isBefore(startDate)) {
+            throw new BadRequestException("日期范围不合法");
+        }
+
+        List<Doctor> doctorList = doctorRepository.findAllById(doctorIds);
+        if (doctorList.size() != doctorIds.stream().distinct().count()) {
+            throw new ResourceNotFoundException("部分医生不存在");
+        }
+
+        Map<String, Long> reservedCountMap = new HashMap<>();
+        for (Object[] row : appointmentRepository.countReservedAppointmentsByDoctorsAndDateRange(
+            doctorIds,
+            startDate,
+            endDate,
+            STATUS_RESERVED
+        )) {
+            Long doctorId = ((Number) row[0]).longValue();
+            java.time.LocalDate appointmentDate = (java.time.LocalDate) row[1];
+            String timeSlot = (String) row[2];
+            long reservedCount = ((Number) row[3]).longValue();
+            reservedCountMap.put(buildQuotaKey(doctorId, appointmentDate, timeSlot), reservedCount);
+        }
+
+        List<AppointmentQuotaResponse> quotas = doctorList.stream()
+            .flatMap(doctor -> startDate.datesUntil(endDate.plusDays(1))
+                .map(date -> {
+                    String timeSlot = doctor.getWorkTimeSlot() == null ? "" : doctor.getWorkTimeSlot().trim();
+                    long reservedCount = reservedCountMap.getOrDefault(buildQuotaKey(doctor.getId(), date, timeSlot), 0L);
+                    return new AppointmentQuotaResponse(
+                        doctor.getId(),
+                        date,
+                        timeSlot,
+                        reservedCount,
+                        Math.max(SLOT_CAPACITY - reservedCount, 0),
+                        SLOT_CAPACITY
+                    );
+                }))
+            .sorted(
+                Comparator.comparing(AppointmentQuotaResponse::appointmentDate)
+                    .thenComparing(AppointmentQuotaResponse::doctorId)
+            )
+            .toList();
+
+        return new AppointmentQuotaCalendarResponse(startDate, endDate, quotas);
     }
 
     public AppointmentResponse cancelAppointment(Long id) {
@@ -168,8 +253,12 @@ public class AppointmentService {
         );
     }
 
+    private String buildQuotaKey(Long doctorId, java.time.LocalDate appointmentDate, String timeSlot) {
+        return doctorId + "|" + appointmentDate + "|" + timeSlot;
+    }
+
     private String currentPatientPhone(String fallbackPhone) {
-        var currentUser = AuthContext.get();
+        SessionUser currentUser = AuthContext.get();
         String normalizedFallback = fallbackPhone == null ? "" : fallbackPhone.trim();
         if (currentUser == null) {
             return normalizedFallback;
@@ -183,12 +272,17 @@ public class AppointmentService {
     }
 
     private void ensureCanOperateAppointment(Appointment appointment) {
-        var currentUser = AuthContext.get();
+        SessionUser currentUser = AuthContext.get();
         if (currentUser == null || AuthService.ROLE_ADMIN.equals(currentUser.role())) {
             return;
         }
 
-        if (!appointment.getPatientPhone().equals(currentUser.phone())) {
+        Long currentUserId = currentUserId(currentUser);
+        boolean canOperate =
+            (currentUserId != null && appointment.getUser() != null && currentUserId.equals(appointment.getUser().getId()))
+                || (appointment.getUser() == null && appointment.getPatientPhone().equals(currentUser.phone()));
+
+        if (!canOperate) {
             throw new BadRequestException("只能操作自己的预约记录");
         }
     }
@@ -203,6 +297,7 @@ public class AppointmentService {
     private AppointmentResponse toResponse(Appointment appointment) {
         return new AppointmentResponse(
             appointment.getId(),
+            appointment.getUser() == null ? null : appointment.getUser().getId(),
             appointment.getHospital().getId(),
             appointment.getHospital().getName(),
             appointment.getRoom().getId(),
@@ -219,5 +314,26 @@ public class AppointmentService {
             appointment.getCreatedAt(),
             appointment.getUpdatedAt()
         );
+    }
+
+    private Long currentUserId(SessionUser currentUser) {
+        if (currentUser == null || AuthService.ROLE_ADMIN.equals(currentUser.role())) {
+            return null;
+        }
+        return currentUser.id();
+    }
+
+    private UserAccount currentUserAccount() {
+        SessionUser currentUser = AuthContext.get();
+        Long currentUserId = currentUserId(currentUser);
+        if (currentUserId != null) {
+            return userAccountRepository.findById(currentUserId).orElse(null);
+        }
+
+        if (currentUser == null || AuthService.ROLE_ADMIN.equals(currentUser.role())) {
+            return null;
+        }
+
+        return userAccountRepository.findByPhone(currentUser.phone()).orElse(null);
     }
 }

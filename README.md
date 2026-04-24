@@ -2,94 +2,84 @@
 
 智能医院挂号系统（Intelligent Hospital Registration System）。
 
-这是一个面向患者与医院管理人员的全栈项目，包含前端页面、业务后端、AI 导诊服务，以及基于 Docker Compose 的一键部署方案。当前版本已经打通了登录鉴权、AI 导诊、挂号预约、后台管理、医生排班与预约容量控制等核心链路。
+IHRS 是一个面向患者与医院管理人员的全栈示例项目，覆盖 AI 导诊、挂号预约、用户登录、后台管理和 Docker 一键部署等完整链路。当前仓库已经包含前端、业务后端、独立 AI 服务以及 MySQL / Redis / RabbitMQ 的容器化运行方案，适合课程设计、毕设展示、全栈练手和二次开发。
 
-## 项目简介
+## 项目亮点
 
-IHRS 旨在提供一套完整的医院预约与导诊系统，覆盖以下典型场景：
+- 面向普通用户与管理员的双角色系统
+- 支持手机号注册、登录、会话鉴权与权限隔离
+- 支持 AI 导诊并将推荐结果带入预约流程
+- 支持医院、诊室、医生、预约四大后台管理模块
+- 支持医生排班、时段限额、重复预约校验
+- 支持首页查看“我的预约”并直接取消预约
+- 支持未来 15 天号源展示与预约容量查询
+- 支持 Docker Compose 一键启动完整环境
 
-- 普通用户使用手机号和密码登录
-- 普通用户通过 AI 问诊获取推荐科室、医院、诊室和医生
-- 普通用户按医生时段完成挂号预约
-- 管理员维护医院、诊室、医生和预约数据
-- 系统根据医生排班和时段容量限制控制可预约资源
-
-## 当前已实现功能
+## 功能概览
 
 ### 1. 用户与权限
 
-- 首页支持用户切换
-- 支持手机号 + 密码登录
-- 支持普通用户注册
-- 系统内置唯一管理员账号
-- 普通用户只能访问：
-  - `AI 问诊`
-  - `挂号预约`
-- 管理员才能访问：
-  - `后台管理`
-  - 全部医院 / 诊室 / 医生 / 预约管理功能
+- 普通用户可注册并登录系统
+- 管理员可通过内置账号登录后台
+- Redis 用于存储登录会话
+- 普通用户只能使用：
+  - 首页
+  - AI 问诊
+  - 挂号预约
+- 管理员额外可访问：
+  - 医院管理
+  - 诊室管理
+  - 医生管理
+  - 预约管理
 
 ### 2. AI 问诊
 
-- 前端提供独立 AI 问诊页面
-- 用户输入症状后，Agent 服务返回初步导诊建议
-- 当前导诊逻辑为规则匹配版
-- 已支持根据症状推荐：
-  - 科室
-  - 医院
-  - 诊室
-  - 医生
-- 用户可从 AI 推荐结果直接跳转到预约页
+- 前端提供独立 AI 问诊入口
+- 用户输入症状后，可得到推荐科室、医院、诊室和医生
+- 当前默认实现为规则匹配 / 占位式导诊逻辑
+- `agent-service` 已预留对接真实大模型的扩展入口
 
 说明：
 
-- 当前尚未接入真实外部大模型
-- `agent-service` 已预留为后续接入 OpenAI / DeepSeek / 通义 / LangChain 的入口
+- 当前结果仅用于导诊演示，不构成医疗诊断建议
+- 可进一步接入 OpenAI、通义、DeepSeek 或 LangChain
 
 ### 3. 挂号预约
 
-- 支持选择医院、诊室、医生、日期、时段进行预约
-- 支持展示当前医生该时段剩余号源
-- 每位医生在同一天同一时段最多预约 `10` 人
-- 同一普通用户不能重复预约同一位医生的同一天同一时段
-- 医生预约名片会根据当前用户的预约情况显示：
-  - `预约`
-  - `已预约`
-- 预约记录支持取消
+- 用户按“医院 -> 诊室 -> 日期 -> 医生 -> 填信息”的流程完成预约
+- 日期选择展示未来 15 天预约情况
+- 支持查看日期维度剩余号源和可约医生数
+- 支持查询医生指定日期 / 时段余号
+- 支持取消预约
+- 首页“我的预约”仅展示状态为“已预约”的有效记录
 
 ### 4. 后台管理
 
-后台管理页面已支持以下模块：
+当前后台已支持以下数据模块：
 
 - 医院管理
 - 诊室管理
 - 医生管理
 - 预约管理
 
-每个模块当前支持：
+每个模块具备的核心能力：
 
 - 列表展示
-- 搜索
-- 筛选
+- 搜索与筛选
 - 查看详情
 - 新增
 - 编辑
 - 删除
 - 批量删除
 
-### 5. 医生排班规则
+### 5. 关键业务规则
 
-- 医生具有固定工作时间段 `workTimeSlot`
-- 同一个诊室的同一个时间段不能同时安排两位医生上班
-- 用户预约时只能选择该时段真正上班的医生
-
-### 6. 页面导航体验
-
-- 已处理浏览器返回按钮导致直接退出页面的问题
-- 当前前端使用 URL 查询参数维护页面状态，例如：
-  - `?view=consult`
-  - `?view=appointment`
-  - `?view=admin&module=doctor`
+- 普通用户必须登录后才能创建预约
+- 同一医生同一天同一时段最多预约 `10` 人
+- 同一普通用户不能重复预约同一医生的同一天同一时段
+- 已取消预约不计入时段容量
+- 同一诊室同一时段不能安排两位医生同时出诊
+- 用户只能预约医生实际排班时段
 
 ## 技术架构
 
@@ -101,7 +91,7 @@ IHRS 旨在提供一套完整的医院预约与导诊系统，覆盖以下典型
 
 ### 后端
 
-- Spring Boot 3.4.5
+- Spring Boot 3
 - Spring Web
 - Spring Data JPA
 - Spring Validation
@@ -109,67 +99,60 @@ IHRS 旨在提供一套完整的医院预约与导诊系统，覆盖以下典型
 - Redis
 - RabbitMQ
 
-### Agent 服务
+### AI 服务
 
 - FastAPI
-- Python 3.11
+- Uvicorn
+- Pydantic
 
 ### 部署
 
 - Docker
 - Docker Compose
-- Nginx（前端容器内）
+- Nginx
 
 ## 项目结构
 
 ```text
 .
-├── frontend/        # Vue 3 前端应用
-├── backend/         # Spring Boot 业务后端
-├── agent-service/   # FastAPI AI 导诊服务
-├── deploy/          # Docker Compose 部署配置
-└── README.md
+├── frontend/                  # Vue 3 前端应用
+├── backend/                   # Spring Boot 后端服务
+├── agent-service/             # FastAPI AI 导诊服务
+├── deploy/                    # Docker Compose 与环境配置
+├── README.md
+└── ...
 ```
 
 ## 运行环境
 
-推荐环境：
+推荐直接使用 Docker 方式启动。
+
+### Docker 运行所需
 
 - Docker
 - Docker Compose
 
-如需本地分服务开发，还需要：
+### 本地分服务开发所需
 
 - Node.js 20+
 - Java 17
-- Python 3.11
 - Maven 3.9+
+- Python 3.11+
 - MySQL 8+
 - Redis 7+
 - RabbitMQ 3.13+
 
-## 快速启动
+## 快速开始
 
-### 方式一：使用 Docker 启动整套项目
+### 方式一：Docker Compose 一键启动
 
-这是当前最推荐的启动方式。
+这是当前最推荐的方式。
 
 ```bash
-cd deploy
-docker compose up --build -d
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up --build -d
 ```
 
-启动后默认访问地址：
-
-- 前端：`http://127.0.0.1:5173`
-- 后端：`http://127.0.0.1:8080`
-- Agent：`http://127.0.0.1:8000`
-- MySQL：`127.0.0.1:3306`
-- Redis：`127.0.0.1:6379`
-- RabbitMQ：`127.0.0.1:5672`
-- RabbitMQ 管理台：`http://127.0.0.1:15672`
-
-查看容器状态：
+查看服务状态：
 
 ```bash
 docker compose -f deploy/docker-compose.yml ps
@@ -181,9 +164,16 @@ docker compose -f deploy/docker-compose.yml ps
 docker compose -f deploy/docker-compose.yml down
 ```
 
-## 本地开发启动
+默认访问地址：
 
-### 1. 前端
+- 前端：`http://127.0.0.1:5173`
+- 后端：`http://127.0.0.1:8080`
+- AI 服务：`http://127.0.0.1:8000`
+- RabbitMQ 管理台：`http://127.0.0.1:15672`
+
+### 方式二：本地分服务启动
+
+#### 1. 启动前端
 
 ```bash
 cd frontend
@@ -197,9 +187,9 @@ npm run dev
 http://127.0.0.1:5173
 ```
 
-### 2. 后端
+#### 2. 启动后端
 
-请先确保 MySQL、Redis、RabbitMQ 可用。
+启动前请确保 MySQL、Redis、RabbitMQ 已可用。
 
 ```bash
 cd backend
@@ -212,7 +202,7 @@ mvn spring-boot:run
 http://127.0.0.1:8080
 ```
 
-### 3. Agent 服务
+#### 3. 启动 AI 服务
 
 ```bash
 cd agent-service
@@ -226,31 +216,56 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 http://127.0.0.1:8000
 ```
 
+## 环境变量说明
+
+Docker 启动默认读取 `deploy/.env`。
+
+当前常用变量包括：
+
+- `FRONTEND_PORT`：前端暴露端口
+- `BACKEND_PORT`：后端暴露端口
+- `AGENT_PORT`：AI 服务端口
+- `MYSQL_DATABASE`：MySQL 数据库名
+- `MYSQL_ROOT_PASSWORD`：MySQL root 密码
+- `MYSQL_USERNAME`：业务数据库用户名
+- `MYSQL_PASSWORD`：业务数据库密码
+- `REDIS_PORT`：Redis 端口
+- `RABBITMQ_PORT`：RabbitMQ 端口
+- `RABBITMQ_MANAGEMENT_PORT`：RabbitMQ 管理台端口
+- `LLM_BASE_URL`：外部大模型兼容接口地址
+- `LLM_API_KEY`：外部大模型密钥
+- `LLM_MODEL`：外部大模型名称
+
+说明：
+
+- 如果你准备公开仓库，建议立即替换或移除当前环境文件中的真实密钥
+- 生产环境请不要直接使用仓库中的默认密码和默认端口
+
 ## 默认账号
 
 ### 管理员账号
 
 - 手机号：`13800000000`
-- 密码：`admin123456`
+- 密码：`040130`
 
 说明：
 
-- 管理员账号只有一个
-- 普通注册入口不能创建管理员
+- 管理员密码可通过后端环境变量 `ADMIN_PASSWORD` 覆盖
+- 普通注册入口不会创建管理员账号
 
 ## 数据存储说明
 
 ### MySQL
 
-业务主数据存储在 MySQL 中，包括：
+核心业务数据存储在 MySQL 中，包括：
 
 - 医院
 - 诊室
 - 医生
 - 预约记录
-- 普通用户账号
+- 用户账号
 
-当前核心表包括：
+当前核心表：
 
 - `hospital`
 - `clinic_room`
@@ -258,7 +273,7 @@ http://127.0.0.1:8000
 - `appointment`
 - `user_account`
 
-后端使用：
+后端默认使用：
 
 ```yaml
 spring.jpa.hibernate.ddl-auto: update
@@ -266,73 +281,58 @@ spring.jpa.hibernate.ddl-auto: update
 
 应用启动时会自动同步表结构。
 
+### 数据表注释
+
+项目内已加入数据库注释初始化器：
+
+- 启动后会自动为核心表写入表注释
+- 同时会为字段写入列注释
+- 当前仅在 MySQL 环境下执行
+
+相关代码位于：
+
+- `backend/src/main/java/com/ihrs/backend/config/DatabaseCommentInitializer.java`
+
 ### Redis
 
-Redis 当前已实际用于登录会话存储。
-
-主要用途：
+Redis 当前主要用于登录会话管理：
 
 - 登录成功后生成 token
-- 以 `ihrs:session:<token>` 的形式写入 Redis
-- 后端接口通过 Redis 校验登录状态
-- 后端根据 Redis 中的用户身份判断是否为管理员
-
-说明：
-
-- 当前 Redis 主要用于鉴权会话
-- 医院、诊室、医生、预约等业务主数据仍然存储在 MySQL 中
+- 以 `ihrs:session:<token>` 的形式保存会话
+- 后端基于 Redis 校验登录态与角色信息
 
 ### RabbitMQ
 
-RabbitMQ 当前已接入容器与配置，但业务上暂未深度使用，后续可扩展为：
+RabbitMQ 当前已接入部署和基础配置，后续可以扩展为：
 
-- 异步预约通知
-- 消息队列解耦
-- 导诊任务异步化
+- 预约通知
+- 异步任务解耦
+- 导诊任务排队处理
 
-## 关键业务规则
+## API 概览
 
-### 预约规则
-
-- 普通用户必须登录后才能预约
-- 同一个医生同一天同一时段最多预约 `10` 人
-- 同一个普通用户只能预约同一个医生同一天同一时段一次
-- 已取消预约不计入时段容量
-
-### 医生排班规则
-
-- 医生必须具备工作时间段
-- 同一诊室同一时间段不能存在两位医生同时排班
-
-### 权限规则
-
-- 未登录用户不能访问预约和后台管理接口
-- 普通用户不能访问 `/api/admin/**`
-- 管理员拥有全部管理权限
-
-## 前后端接口说明
-
-### 认证相关
+### 认证接口
 
 - `POST /api/auth/register`：普通用户注册
 - `POST /api/auth/login`：登录
 - `POST /api/auth/logout`：退出登录
-- `GET /api/auth/me`：获取当前登录状态
+- `GET /api/auth/me`：获取当前登录用户
 
-### 公开资源
+### 公开目录接口
 
 - `GET /api/catalog/hospitals`
 - `GET /api/catalog/rooms`
 - `GET /api/catalog/doctors`
 
-### 预约相关
+### 预约接口
 
-- `POST /api/appointments`
-- `GET /api/appointments`
-- `PUT /api/appointments/{id}/cancel`
-- `GET /api/appointments/quota`
+- `POST /api/appointments`：创建预约
+- `GET /api/appointments`：查询当前用户预约
+- `PUT /api/appointments/{id}/cancel`：取消当前用户预约
+- `GET /api/appointments/quota`：查询指定医生某日某时段余号
+- `GET /api/appointments/quota-calendar`：查询日期范围内可预约日历数据
 
-### 后台管理
+### 后台管理接口
 
 - `GET /api/admin/hospitals`
 - `POST /api/admin/hospitals`
@@ -353,10 +353,10 @@ RabbitMQ 当前已接入容器与配置，但业务上暂未深度使用，后�
 - `PUT /api/admin/appointments/{id}/cancel`
 - `DELETE /api/admin/appointments/{id}`
 
-### 健康检查
+### 健康检查接口
 
-- `GET /api/health`
-- `GET /health`（agent-service）
+- 后端：`GET /actuator/health`
+- AI 服务：`GET /health`
 
 ## Docker 说明
 
@@ -369,47 +369,40 @@ RabbitMQ 当前已接入容器与配置，但业务上暂未深度使用，后�
 - `redis`
 - `rabbitmq`
 
-其中：
+代理关系如下：
 
-- 前端容器通过 Nginx 反向代理后端和 Agent 服务
-- 前端 `/api/*` 会转发到后端
-- 前端 `/agent/*` 会转发到 `agent-service`
+- 前端容器通过 Nginx 对后端和 AI 服务做反向代理
+- 前端访问 `/api/*` 时转发到后端
+- 前端访问 `/agent/*` 时转发到 AI 服务
 
-## 当前 AI 能力现状
+## 当前代码特点
 
-当前 AI 导诊为规则匹配版，适合作为第一阶段演示和前后端联调基础。
+- 前端主页面目前集中在 `frontend/src/App.vue`
+- 样式主要集中在 `frontend/src/styles.css`
+- 后端当前使用自定义拦截器完成鉴权，而非完整 Spring Security
+- Vite 构建时会有 chunk size warning，但不影响当前运行
 
-现阶段优点：
+## 已实现的用户体验改进
 
-- 无需外部模型服务即可运行
-- 可以稳定演示从问诊到推荐再到预约的完整链路
-- 便于后续无缝替换成真实大模型
-
-下一步推荐升级方向：
-
-- 接入真实大模型 API
-- 增加提示词模板
-- 增加结构化推荐结果
-- 引入向量检索和知识库
-- 根据医生详情和专长做更精细匹配
-
-## 已知说明
-
-- 当前 AI 导诊结果仅供辅助参考，不构成医疗诊断
-- 当前前端主页面集中在 `frontend/src/App.vue`
-- 当前后端使用自定义拦截器做鉴权，尚未引入完整 Spring Security
-- 当前前端构建产物体积较大，Vite build 会提示 chunk size warning，但不影响运行
+- 首页支持快速查看“我的预约”
+- 首页可直接取消有效预约
+- 已取消预约不会继续出现在首页预约列表中
+- 预约页支持未来 15 天日期卡片展示
+- 预约页支持日期取消选择和医生延迟展示
+- 首页和预约页的文案与信息层级已做过多轮简化
 
 ## 后续可继续完善
 
 - 接入真实大模型问诊
-- 增加预约记录“我的预约”独立页面
-- 增加短信通知 / 邮件通知
-- 增加医生出诊日历
-- 增加管理员统计报表
-- 增加单元测试与接口测试
-- 将前端页面拆分为多个 Vue 组件，降低 `App.vue` 复杂度
+- 引入 RAG / 知识库检索
+- 将 `App.vue` 拆分为更清晰的组件结构
+- 增加单元测试、接口测试和端到端测试
+- 增加短信 / 邮件通知
+- 增加管理员统计图表
+- 增加预约记录导出能力
 
-## License
+## 注意事项
 
-当前仓库未单独声明开源许可证。如需开源发布，建议补充 `LICENSE` 文件。
+- AI 导诊结果仅供参考，不构成正式医疗建议
+- 当前仓库未单独声明开源许可证
+- 如需公开发布，建议补充 `LICENSE` 并清理敏感配置

@@ -1,6 +1,7 @@
 package com.ihrs.backend.controller;
 
 import com.ihrs.backend.dto.AppointmentRequest;
+import com.ihrs.backend.dto.AppointmentQuotaCalendarResponse;
 import com.ihrs.backend.dto.AppointmentQuotaResponse;
 import com.ihrs.backend.dto.AppointmentResponse;
 import com.ihrs.backend.service.AppointmentService;
@@ -51,6 +52,15 @@ public class AppointmentController {
         @RequestParam String timeSlot
     ) {
         return appointmentService.getQuota(doctorId, appointmentDate, timeSlot);
+    }
+
+    @GetMapping("/api/appointments/quota-calendar")
+    public AppointmentQuotaCalendarResponse getAppointmentQuotaCalendar(
+        @RequestParam List<Long> doctorIds,
+        @RequestParam LocalDate startDate,
+        @RequestParam LocalDate endDate
+    ) {
+        return appointmentService.getQuotaCalendar(doctorIds, startDate, endDate);
     }
 
     @GetMapping("/api/admin/appointments")

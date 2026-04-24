@@ -63,7 +63,7 @@ public class AuthService {
         user.setRole(ROLE_USER);
         userAccountRepository.save(user);
 
-        return createSession(new SessionUser(user.getPhone(), user.getName(), user.getRole()));
+        return createSession(new SessionUser(user.getId(), user.getPhone(), user.getName(), user.getRole()));
     }
 
     @Transactional(readOnly = true)
@@ -76,7 +76,7 @@ public class AuthService {
                 throw new BadRequestException("手机号或密码错误");
             }
 
-            return createSession(new SessionUser(adminPhone, "系统管理员", ROLE_ADMIN));
+            return createSession(new SessionUser(null, adminPhone, "系统管理员", ROLE_ADMIN));
         }
 
         UserAccount user = userAccountRepository.findByPhone(phone)
@@ -86,7 +86,7 @@ public class AuthService {
             throw new BadRequestException("手机号或密码错误");
         }
 
-        return createSession(new SessionUser(user.getPhone(), user.getName(), user.getRole()));
+        return createSession(new SessionUser(user.getId(), user.getPhone(), user.getName(), user.getRole()));
     }
 
     public SessionUser getSessionUser(String token) {
@@ -99,13 +99,22 @@ public class AuthService {
             return null;
         }
 
-        String[] parts = value.split("\\|", 3);
-        if (parts.length != 3) {
+        String[] parts = value.split("\\|", 4);
+        if (parts.length != 3 && parts.length != 4) {
             return null;
         }
 
         redisTemplate.expire(SESSION_PREFIX + token.trim(), SESSION_TTL);
-        return new SessionUser(parts[0], parts[1], parts[2]);
+        if (parts.length == 3) {
+            return new SessionUser(null, parts[0], parts[1], parts[2]);
+        }
+
+        try {
+            Long userId = parts[0].isBlank() ? null : Long.parseLong(parts[0]);
+            return new SessionUser(userId, parts[1], parts[2], parts[3]);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     public void logout(String token) {
@@ -118,10 +127,10 @@ public class AuthService {
         String token = UUID.randomUUID().toString().replace("-", "");
         redisTemplate.opsForValue().set(
             SESSION_PREFIX + token,
-            String.join("|", user.phone(), user.name(), user.role()),
+            String.join("|", user.id() == null ? "" : String.valueOf(user.id()), user.phone(), user.name(), user.role()),
             SESSION_TTL
         );
-        return new AuthResponse(token, user.phone(), user.name(), user.role());
+        return new AuthResponse(token, user.id(), user.phone(), user.name(), user.role());
     }
 
     private String hashPassword(String password) {

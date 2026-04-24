@@ -43,6 +43,10 @@ public class Appointment {
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Doctor doctor;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id")
+    private UserAccount user;
+
     @Column(name = "patient_name", nullable = false, length = 50)
     private String patientName;
 

@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 
 public record AppointmentResponse(
     Long id,
+    Long userId,
     Long hospitalId,
     String hospitalName,
     Long roomId,

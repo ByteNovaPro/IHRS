@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
   cancelAppointment,
+  cancelMyAppointment,
   clearStoredAuth,
   consultSymptom,
   createAppointment,
@@ -14,6 +15,7 @@ import {
   deleteHospital,
   deleteRoom,
   getAppointmentQuota,
+  getAppointmentQuotaCalendar,
   getStoredAuth,
   listAdminAppointments,
   listDoctors,
@@ -56,7 +58,13 @@ const isLoadingQuota = ref(false);
 const isConsulting = ref(false);
 const isAuthenticating = ref(false);
 const currentUser = ref(getStoredAuth());
-const authMode = ref("login");
+const AUTH_MODE_LOGIN = "login";
+const AUTH_MODE_REGISTER = "register";
+const AUTH_MODE_ADMIN = "admin";
+
+const ADMIN_PHONE = "13800000000";
+
+const authMode = ref(AUTH_MODE_LOGIN);
 
 const moduleMeta = {
   hospital: {
@@ -125,6 +133,7 @@ const workTimeOptions = [
   "下午 14:00-16:00",
   "下午 16:00-17:30",
 ];
+const APPOINTMENT_DATE_FUTURE_DAYS = 15;
 
 const appointmentForm = reactive({
   hospitalId: null,
@@ -136,6 +145,12 @@ const appointmentForm = reactive({
   timeSlot: "上午 08:30-10:30",
   symptom: "",
 });
+
+const appointmentStep = ref(1);
+const expandedHospitalIds = ref([]);
+const expandedRoomIds = ref([]);
+const browsedHospitalId = ref(null);
+const browsedRoomId = ref(null);
 
 const authForm = reactive({
   phone: "",
@@ -150,6 +165,8 @@ const consultForm = reactive({
 const consultResult = ref(null);
 const consultRecommendations = ref([]);
 const appointmentQuota = ref(null);
+const appointmentCalendarQuotas = ref([]);
+const isLoadingAppointmentCalendar = ref(false);
 
 const filters = reactive({
   keyword: "",
@@ -162,9 +179,133 @@ const currentTitle = computed(() => moduleMeta[activeModule.value].title);
 const currentSubtitle = computed(() => moduleMeta[activeModule.value].subtitle);
 const isLoggedIn = computed(() => Boolean(currentUser.value?.token));
 const isAdminUser = computed(() => currentUser.value?.role === "ADMIN");
+const appointmentHospitals = computed(() => hospitals.value.filter(Boolean));
+const selectedAppointmentHospital = computed(() =>
+  hospitals.value.find((hospital) => hospital.id === Number(appointmentForm.hospitalId)),
+);
+const selectedAppointmentRoom = computed(() =>
+  rooms.value.find((room) => room.id === Number(appointmentForm.roomId)),
+);
 const selectedAppointmentDoctor = computed(() =>
   doctors.value.find((doctor) => doctor.id === Number(appointmentForm.doctorId)),
 );
+const selectedAppointmentHospitalRooms = computed(() => getHospitalRooms(appointmentForm.hospitalId));
+const selectedAppointmentHospitalDoctors = computed(() => getHospitalDoctors(appointmentForm.hospitalId));
+const selectedAppointmentRoomDoctors = computed(() => getRoomDoctors(appointmentForm.roomId));
+const appointmentFocusedHospital = computed(
+  () =>
+    hospitals.value.find((hospital) => hospital.id === Number(browsedHospitalId.value))
+    || selectedAppointmentHospital.value
+    || appointmentHospitals.value[0]
+    || null,
+);
+const appointmentFocusedRoom = computed(
+  () =>
+    rooms.value.find((room) => room.id === Number(browsedRoomId.value))
+    || selectedAppointmentRoom.value
+    || appointmentFocusedHospitalRooms.value[0]
+    || null,
+);
+const appointmentFocusedHospitalRooms = computed(() => getHospitalRooms(appointmentFocusedHospital.value?.id));
+const appointmentFocusedHospitalDoctors = computed(() => getHospitalDoctors(appointmentFocusedHospital.value?.id));
+const appointmentFocusedRoomDoctors = computed(() => getRoomDoctors(appointmentFocusedRoom.value?.id));
+const selectedDateDoctorQuotaMap = computed(() => {
+  const quotaMap = new Map();
+
+  for (const quota of appointmentCalendarQuotas.value) {
+    if (quota.appointmentDate === appointmentForm.appointmentDate) {
+      quotaMap.set(quota.doctorId, quota);
+    }
+  }
+
+  return quotaMap;
+});
+const appointmentDateSummaries = computed(() => {
+  const roomDoctors = selectedAppointmentRoomDoctors.value.filter(Boolean);
+  if (!roomDoctors.length) {
+    return [];
+  }
+
+  const doctorIds = new Set(roomDoctors.map((doctor) => doctor.id));
+  const summaryMap = new Map();
+
+  for (const quota of appointmentCalendarQuotas.value) {
+    if (!doctorIds.has(quota.doctorId)) {
+      continue;
+    }
+
+    const current = summaryMap.get(quota.appointmentDate) || {
+      date: quota.appointmentDate,
+      totalRemaining: 0,
+      totalReserved: 0,
+      totalCapacity: 0,
+      availableDoctors: 0,
+      doctorCount: roomDoctors.length,
+    };
+
+    current.totalRemaining += quota.remainingCount;
+    current.totalReserved += quota.reservedCount;
+    current.totalCapacity += quota.capacity;
+    if (quota.remainingCount > 0) {
+      current.availableDoctors += 1;
+    }
+
+    summaryMap.set(quota.appointmentDate, current);
+  }
+
+  return [...summaryMap.values()]
+    .sort((left, right) => left.date.localeCompare(right.date))
+    .map((item) => ({
+      ...item,
+      status: item.availableDoctors === 0 ? "full" : item.availableDoctors === item.doctorCount ? "available" : "partial",
+      label:
+        item.availableDoctors === 0
+          ? "已满"
+          : item.availableDoctors === item.doctorCount
+            ? "可约"
+            : "部分可约",
+    }));
+});
+const appointmentDateSummaryMap = computed(
+  () => new Map(appointmentDateSummaries.value.map((item) => [item.date, item])),
+);
+const appointmentMaxUnlockedStep = computed(() => {
+  if (!appointmentForm.hospitalId) {
+    return 1;
+  }
+
+  if (!appointmentForm.roomId) {
+    return 2;
+  }
+
+  if (!appointmentForm.doctorId || !appointmentForm.appointmentDate) {
+    return 3;
+  }
+
+  return 4;
+});
+const appointmentStepItems = computed(() => [
+  {
+    step: 1,
+    label: "选医院",
+    hint: "先看地址、诊室和简介",
+  },
+  {
+    step: 2,
+    label: "选诊室",
+    hint: "比较诊室方向和医生配置",
+  },
+  {
+    step: 3,
+    label: "选医生",
+    hint: "结合擅长方向和出诊时段",
+  },
+  {
+    step: 4,
+    label: "填信息",
+    hint: "确认资料并完成预约",
+  },
+]);
 const isAppointmentSlotFull = computed(() => appointmentQuota.value?.remainingCount === 0);
 const bookedSlotKeys = computed(
   () =>
@@ -219,6 +360,28 @@ const visibleDoctors = computed(() =>
     ])),
 );
 const visibleAppointments = computed(() => appointments.value.filter(Boolean));
+const homeAppointments = computed(() =>
+  [...userAppointments.value]
+    .filter(Boolean)
+    .filter((appointment) => appointment.status === "已预约")
+    .map((appointment) => {
+      const hospitalId = Number(appointment.hospitalId);
+      const roomId = Number(appointment.roomId);
+      const hospital = hospitals.value.find((item) => Number(item?.id) === hospitalId);
+      const room = rooms.value.find((item) => Number(item?.id) === roomId);
+
+      return {
+        ...appointment,
+        hospitalLocation: hospital?.location || "",
+        roomFloor: room?.floor || "",
+      };
+    })
+    .sort((left, right) => {
+      const leftValue = `${left.appointmentDate || ""} ${left.timeSlot || ""}`;
+      const rightValue = `${right.appointmentDate || ""} ${right.timeSlot || ""}`;
+      return rightValue.localeCompare(leftValue);
+    }),
+);
 const selectedHospitalIds = ref([]);
 const selectedRoomIds = ref([]);
 const selectedDoctorIds = ref([]);
@@ -340,6 +503,18 @@ function normalizeText(value) {
   return String(value ?? "").toLowerCase();
 }
 
+function formatLocalDate(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function matchesKeyword(values) {
   if (!normalizedKeyword.value) {
     return true;
@@ -360,13 +535,174 @@ function isSlotBooked(doctorId, appointmentDate, timeSlot) {
   return bookedSlotKeys.value.has(buildSlotKey(doctorId, appointmentDate, timeSlot));
 }
 
+function getDoctorQuotaForSelectedDate(doctorId) {
+  return selectedDateDoctorQuotaMap.value.get(Number(doctorId)) || null;
+}
+
+function getDateSummaryLabel(dateString) {
+  return appointmentDateSummaryMap.value.get(dateString)?.label || "待加载";
+}
+
+function getDateSummary(dateString) {
+  return appointmentDateSummaryMap.value.get(dateString) || null;
+}
+
+function getCalendarCellDateString(cell) {
+  return cell?.dayjs?.format("YYYY-MM-DD") || "";
+}
+
+function getCalendarCellSummary(cell) {
+  return getDateSummary(getCalendarCellDateString(cell));
+}
+
+function isCalendarOutsideMonth(cell) {
+  return cell?.type === "prev-month" || cell?.type === "next-month";
+}
+
+function getAppointmentWindowStartDateString() {
+  return formatLocalDate(new Date());
+}
+
+function getAppointmentWindowEndDateString() {
+  return formatLocalDate(new Date(Date.now() + APPOINTMENT_DATE_FUTURE_DAYS * 24 * 60 * 60 * 1000));
+}
+
+function isDateInAppointmentWindow(dateString) {
+  if (!dateString) {
+    return false;
+  }
+
+  return dateString >= getAppointmentWindowStartDateString() && dateString <= getAppointmentWindowEndDateString();
+}
+
+function getCalendarCellMeta(cell) {
+  if (isCalendarOutsideMonth(cell)) {
+    return null;
+  }
+
+  const dateString = getCalendarCellDateString(cell);
+  if (!isDateInAppointmentWindow(dateString)) {
+    return null;
+  }
+
+  const summary = getCalendarCellSummary(cell);
+
+  if (summary) {
+    return {
+      status: getDateSummaryLabel(dateString),
+      lines: [`可约 ${summary.availableDoctors} 位医生`, `剩余 ${summary.totalRemaining} 个号`],
+    };
+  }
+  return {
+    status: "待放号",
+    lines: ["暂无号源", "请换日期"],
+  };
+}
+
+function formatAppointmentCardDate(dateString) {
+  if (!dateString) {
+    return "";
+  }
+
+  const date = new Date(`${dateString}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return dateString;
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+  }).format(date);
+}
+
+function formatAppointmentCardWeekday(dateString) {
+  if (!dateString) {
+    return "";
+  }
+
+  const date = new Date(`${dateString}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    weekday: "short",
+  }).format(date);
+}
+
+function getDateSummaryLine(dateString) {
+  const summary = appointmentDateSummaryMap.value.get(dateString);
+  if (!summary) {
+    return "号源信息加载中";
+  }
+
+  if (summary.availableDoctors === 0) {
+    return `当日全部排满，共 ${summary.doctorCount} 位医生`;
+  }
+
+  return `可约 ${summary.availableDoctors} 位医生，剩余 ${summary.totalRemaining} 个号`;
+}
+
+function disabledAppointmentDate(date) {
+  const dateString = formatLocalDate(date);
+  const startDate = getAppointmentWindowStartDateString();
+  const endDate = getAppointmentWindowEndDateString();
+
+  if (!dateString || dateString < startDate || dateString > endDate) {
+    return true;
+  }
+
+  if (!selectedAppointmentRoomDoctors.value.length) {
+    return false;
+  }
+
+  const summary = appointmentDateSummaryMap.value.get(dateString);
+  return Boolean(summary && summary.availableDoctors === 0);
+}
+
+function handleAppointmentDateChange(value) {
+  if (!value) {
+    appointmentQuota.value = null;
+    return;
+  }
+
+  const selectedDoctorQuota = getDoctorQuotaForSelectedDate(appointmentForm.doctorId);
+  if (selectedDoctorQuota) {
+    appointmentQuota.value = selectedDoctorQuota;
+    return;
+  }
+
+  loadAppointmentQuota();
+}
+
+function toggleAppointmentDate(dateString) {
+  if (!dateString) {
+    return;
+  }
+
+  if (appointmentForm.appointmentDate === dateString) {
+    appointmentForm.appointmentDate = "";
+    appointmentForm.doctorId = null;
+    appointmentQuota.value = null;
+    return;
+  }
+
+  appointmentForm.appointmentDate = dateString;
+  handleAppointmentDateChange(dateString);
+}
+
 async function submitAuth() {
-  if (!authForm.phone.trim() || !authForm.password.trim()) {
+  if (authMode.value === AUTH_MODE_ADMIN) {
+    if (!authForm.password.trim()) {
+      ElMessage.warning("请输入管理员口令");
+      return;
+    }
+  } else if (!authForm.phone.trim() || !authForm.password.trim()) {
     ElMessage.warning("请输入手机号和密码");
     return;
   }
 
-  if (authMode.value === "register" && !authForm.name.trim()) {
+  if (authMode.value === AUTH_MODE_REGISTER && !authForm.name.trim()) {
     ElMessage.warning("请输入姓名");
     return;
   }
@@ -375,12 +711,17 @@ async function submitAuth() {
 
   try {
     const auth =
-      authMode.value === "register"
+      authMode.value === AUTH_MODE_REGISTER
         ? await register({
             phone: authForm.phone.trim(),
             password: authForm.password,
             name: authForm.name.trim(),
           })
+        : authMode.value === AUTH_MODE_ADMIN
+          ? await login({
+              phone: ADMIN_PHONE,
+              password: authForm.password.trim(),
+            })
         : await login({
             phone: authForm.phone.trim(),
             password: authForm.password,
@@ -391,9 +732,10 @@ async function submitAuth() {
     applyLoggedInUserToAppointment();
     authForm.password = "";
     authForm.name = "";
+    authForm.phone = "";
     currentView.value = "home";
     pushRouteState();
-    ElMessage.success(authMode.value === "register" ? "注册并登录成功" : "登录成功");
+    ElMessage.success(authMode.value === AUTH_MODE_REGISTER ? "注册并登录成功" : "登录成功");
   } catch (error) {
     ElMessage.error(error.message || "登录失败");
   } finally {
@@ -420,6 +762,10 @@ async function logoutCurrentUser() {
 function switchAuthMode(mode) {
   authMode.value = mode;
   authForm.password = "";
+  if (mode === AUTH_MODE_ADMIN) {
+    authForm.phone = "";
+    authForm.name = "";
+  }
 }
 
 function applyLoggedInUserToAppointment() {
@@ -543,6 +889,232 @@ function getRoomName(roomId) {
   return rooms.value.find((room) => room?.id === roomId)?.name ?? "未关联诊室";
 }
 
+function sortRoomsByPresentation(left, right) {
+  return String(left?.floor ?? "").localeCompare(String(right?.floor ?? ""), "zh-Hans-CN")
+    || String(left?.name ?? "").localeCompare(String(right?.name ?? ""), "zh-Hans-CN");
+}
+
+function sortDoctorsBySchedule(left, right) {
+  return workTimeOptions.indexOf(left?.workTimeSlot) - workTimeOptions.indexOf(right?.workTimeSlot)
+    || String(left?.name ?? "").localeCompare(String(right?.name ?? ""), "zh-Hans-CN");
+}
+
+function getHospitalRooms(hospitalId) {
+  const normalizedHospitalId = Number(hospitalId);
+  if (!normalizedHospitalId) {
+    return [];
+  }
+
+  return rooms.value
+    .filter((room) => room?.hospitalId === normalizedHospitalId)
+    .sort(sortRoomsByPresentation);
+}
+
+function getHospitalDoctors(hospitalId) {
+  const normalizedHospitalId = Number(hospitalId);
+  if (!normalizedHospitalId) {
+    return [];
+  }
+
+  return doctors.value
+    .filter((doctor) => doctor?.hospitalId === normalizedHospitalId)
+    .sort(sortDoctorsBySchedule);
+}
+
+function getRoomDoctors(roomId) {
+  const normalizedRoomId = Number(roomId);
+  if (!normalizedRoomId) {
+    return [];
+  }
+
+  return doctors.value
+    .filter((doctor) => doctor?.roomId === normalizedRoomId)
+    .sort(sortDoctorsBySchedule);
+}
+
+function getAppointmentStepDescription() {
+  if (appointmentStep.value === 1) {
+    return "先看医院位置、等级与资源分布，再决定去哪里就诊。";
+  }
+
+  if (appointmentStep.value === 2) {
+    return "在已选医院里继续比较诊室介绍、楼层位置和医生配置。";
+  }
+
+  if (appointmentStep.value === 3) {
+    return "先选预约日期，再根据医生擅长方向和出诊时段完成医生选择。";
+  }
+
+  return "最后确认预约路径，填写就诊人资料并提交预约。";
+}
+
+function getAppointmentStepTitle() {
+  if (appointmentStep.value === 1) {
+    return "第一步：先选医院";
+  }
+
+  if (appointmentStep.value === 2) {
+    return "第二步：再选诊室";
+  }
+
+  if (appointmentStep.value === 3) {
+    return "第三步：选医生与预约日期";
+  }
+
+  return "第四步：填写就诊人信息";
+}
+
+function openAppointmentStep(step) {
+  appointmentStep.value = Math.max(1, Math.min(step, appointmentMaxUnlockedStep.value));
+}
+
+function isHospitalPreviewExpanded(hospitalId) {
+  return expandedHospitalIds.value.includes(Number(hospitalId));
+}
+
+function isRoomDoctorPreviewExpanded(roomId) {
+  return expandedRoomIds.value.includes(Number(roomId));
+}
+
+function showHospitalDetails(hospitalId) {
+  browsedHospitalId.value = Number(hospitalId);
+}
+
+function showRoomDetails(roomId) {
+  browsedRoomId.value = Number(roomId);
+}
+
+function toggleHospitalPreview(hospitalId) {
+  const normalizedHospitalId = Number(hospitalId);
+  showHospitalDetails(normalizedHospitalId);
+  if (isHospitalPreviewExpanded(normalizedHospitalId)) {
+    expandedHospitalIds.value = expandedHospitalIds.value.filter((id) => id !== normalizedHospitalId);
+    return;
+  }
+
+  expandedHospitalIds.value = [...expandedHospitalIds.value, normalizedHospitalId];
+}
+
+function toggleRoomDoctorPreview(roomId) {
+  const normalizedRoomId = Number(roomId);
+  showRoomDetails(normalizedRoomId);
+  if (isRoomDoctorPreviewExpanded(normalizedRoomId)) {
+    expandedRoomIds.value = expandedRoomIds.value.filter((id) => id !== normalizedRoomId);
+    return;
+  }
+
+  expandedRoomIds.value = [...expandedRoomIds.value, normalizedRoomId];
+}
+
+function selectAppointmentHospital(hospital) {
+  showHospitalDetails(hospital.id);
+  appointmentForm.hospitalId = hospital.id;
+  appointmentForm.roomId = null;
+  appointmentForm.doctorId = null;
+  appointmentForm.appointmentDate = "";
+  appointmentForm.timeSlot = workTimeOptions[0];
+  appointmentQuota.value = null;
+  appointmentCalendarQuotas.value = [];
+  openAppointmentStep(2);
+}
+
+async function selectAppointmentRoom(room) {
+  showHospitalDetails(room.hospitalId);
+  showRoomDetails(room.id);
+  appointmentForm.hospitalId = room.hospitalId;
+  appointmentForm.roomId = room.id;
+  appointmentForm.doctorId = null;
+  appointmentForm.appointmentDate = "";
+  appointmentForm.timeSlot = workTimeOptions[0];
+  appointmentQuota.value = null;
+  await loadAppointmentCalendarQuota(room.id);
+  openAppointmentStep(3);
+}
+
+function selectAppointmentDoctor(doctor) {
+  if (!appointmentForm.appointmentDate) {
+    ElMessage.warning("请先选择预约日期，再继续选择医生");
+    return;
+  }
+
+  showHospitalDetails(doctor.hospitalId);
+  showRoomDetails(doctor.roomId);
+  appointmentForm.hospitalId = doctor.hospitalId;
+  appointmentForm.roomId = doctor.roomId;
+  appointmentForm.doctorId = doctor.id;
+  appointmentForm.timeSlot = doctor.workTimeSlot || workTimeOptions[0];
+
+  const doctorQuota = getDoctorQuotaForSelectedDate(doctor.id);
+  if (doctorQuota?.remainingCount === 0) {
+    ElMessage.warning("该医生在所选日期的号源已满，请选择其他医生或日期");
+    appointmentQuota.value = doctorQuota;
+    return;
+  }
+
+  applyLoggedInUserToAppointment();
+  appointmentQuota.value = doctorQuota || null;
+  loadAppointmentQuota();
+  openAppointmentStep(4);
+}
+
+function ensureAppointmentSelectionConsistency() {
+  const normalizedHospitalId = Number(appointmentForm.hospitalId);
+  const normalizedRoomId = Number(appointmentForm.roomId);
+  const normalizedDoctorId = Number(appointmentForm.doctorId);
+
+  const hospitalExists = hospitals.value.some((hospital) => hospital?.id === normalizedHospitalId);
+  if (!hospitalExists) {
+    appointmentForm.hospitalId = null;
+    appointmentForm.roomId = null;
+    appointmentForm.doctorId = null;
+    appointmentForm.appointmentDate = "";
+    appointmentForm.timeSlot = workTimeOptions[0];
+    appointmentQuota.value = null;
+    appointmentCalendarQuotas.value = [];
+    browsedHospitalId.value = appointmentHospitals.value[0]?.id ?? null;
+    browsedRoomId.value = null;
+    appointmentStep.value = 1;
+    return;
+  }
+
+  const roomExists = rooms.value.some(
+    (room) => room?.id === normalizedRoomId && room.hospitalId === normalizedHospitalId,
+  );
+  if (!roomExists) {
+    appointmentForm.roomId = null;
+    appointmentForm.doctorId = null;
+    appointmentForm.appointmentDate = "";
+    appointmentForm.timeSlot = workTimeOptions[0];
+    appointmentQuota.value = null;
+    appointmentCalendarQuotas.value = [];
+    browsedHospitalId.value = normalizedHospitalId;
+    browsedRoomId.value = getHospitalRooms(normalizedHospitalId)[0]?.id ?? null;
+    appointmentStep.value = 2;
+    return;
+  }
+
+  const doctor = doctors.value.find(
+    (item) =>
+      item?.id === normalizedDoctorId &&
+      item.hospitalId === normalizedHospitalId &&
+      item.roomId === normalizedRoomId,
+  );
+
+  if (!doctor) {
+    appointmentForm.doctorId = null;
+    appointmentQuota.value = null;
+    browsedHospitalId.value = normalizedHospitalId;
+    browsedRoomId.value = normalizedRoomId;
+    appointmentStep.value = 3;
+    return;
+  }
+
+  browsedHospitalId.value = normalizedHospitalId;
+  browsedRoomId.value = normalizedRoomId;
+  appointmentForm.timeSlot = doctor.workTimeSlot || appointmentForm.timeSlot;
+  appointmentStep.value = appointmentForm.appointmentDate ? Math.min(Math.max(appointmentStep.value, 4), 4) : 3;
+}
+
 async function goToAdmin() {
   if (!isAdminUser.value) {
     ElMessage.warning("只有管理员可以访问后台管理");
@@ -578,6 +1150,10 @@ function goToConsult() {
 function goHome() {
   currentView.value = "home";
   pushRouteState();
+
+  if (isLoggedIn.value && !isAdminUser.value) {
+    loadHomeAppointments();
+  }
 }
 
 function switchModule(moduleKey) {
@@ -669,15 +1245,45 @@ async function loadAppointmentResources() {
     rooms.value = roomItems;
     doctors.value = doctorItems;
     userAppointments.value = appointmentItems;
+    if (!browsedHospitalId.value && hospitals.value.length) {
+      browsedHospitalId.value = hospitals.value[0].id;
+    }
+    ensureAppointmentSelectionConsistency();
 
-    if (!appointmentForm.hospitalId && hospitals.value.length) {
-      appointmentForm.hospitalId = hospitals.value[0].id;
-      syncAppointmentRoomOptions();
+    if (appointmentForm.roomId) {
+      await loadAppointmentCalendarQuota(appointmentForm.roomId);
+    } else {
+      appointmentCalendarQuotas.value = [];
+    }
+
+    if (appointmentForm.doctorId && appointmentForm.appointmentDate) {
+      await loadAppointmentQuota();
     }
   } catch (error) {
     ElMessage.error(error.message || "预约资源加载失败");
   } finally {
     isLoadingCatalog.value = false;
+  }
+}
+
+async function loadHomeAppointments() {
+  if (!isLoggedIn.value || isAdminUser.value) {
+    userAppointments.value = [];
+    return;
+  }
+
+  try {
+    const [appointmentItems, hospitalItems, roomItems] = await Promise.all([
+      listAppointments(),
+      hospitals.value.length ? Promise.resolve(hospitals.value) : listHospitals(),
+      rooms.value.length ? Promise.resolve(rooms.value) : listRooms(),
+    ]);
+
+    userAppointments.value = appointmentItems;
+    hospitals.value = hospitalItems;
+    rooms.value = roomItems;
+  } catch (error) {
+    ElMessage.error(error.message || "我的预约加载失败");
   }
 }
 
@@ -791,9 +1397,57 @@ function selectDoctorSlot(doctor) {
   loadAppointmentQuota();
 }
 
+async function loadAppointmentCalendarQuota(roomId = appointmentForm.roomId) {
+  const normalizedRoomId = Number(roomId);
+  const roomDoctors = getRoomDoctors(normalizedRoomId).filter((doctor) => doctor?.id && doctor.workTimeSlot);
+
+  if (!normalizedRoomId || !roomDoctors.length) {
+    appointmentCalendarQuotas.value = [];
+    return;
+  }
+
+  isLoadingAppointmentCalendar.value = true;
+  const startDate = formatLocalDate(new Date());
+  const endDate = getAppointmentWindowEndDateString();
+
+  try {
+    const response = await getAppointmentQuotaCalendar({
+      doctorIds: roomDoctors.map((doctor) => doctor.id),
+      startDate,
+      endDate,
+    });
+    appointmentCalendarQuotas.value = response?.quotas || [];
+
+    if (appointmentForm.appointmentDate) {
+      const summary = appointmentDateSummaryMap.value.get(appointmentForm.appointmentDate);
+      if (summary?.availableDoctors === 0) {
+        appointmentForm.appointmentDate = "";
+        appointmentForm.doctorId = null;
+        appointmentQuota.value = null;
+      } else {
+        const selectedDoctorQuota = getDoctorQuotaForSelectedDate(appointmentForm.doctorId);
+        if (selectedDoctorQuota) {
+          appointmentQuota.value = selectedDoctorQuota;
+        }
+      }
+    }
+  } catch (error) {
+    appointmentCalendarQuotas.value = [];
+    ElMessage.error(error.message || "日期号源加载失败");
+  } finally {
+    isLoadingAppointmentCalendar.value = false;
+  }
+}
+
 async function loadAppointmentQuota() {
   if (!appointmentForm.doctorId || !appointmentForm.appointmentDate || !appointmentForm.timeSlot) {
     appointmentQuota.value = null;
+    return;
+  }
+
+  const cachedQuota = getDoctorQuotaForSelectedDate(appointmentForm.doctorId);
+  if (cachedQuota && cachedQuota.timeSlot === appointmentForm.timeSlot) {
+    appointmentQuota.value = cachedQuota;
     return;
   }
 
@@ -968,7 +1622,10 @@ async function useConsultRecommendation(item) {
   appointmentForm.timeSlot = item.doctor.workTimeSlot || appointmentForm.timeSlot;
   appointmentForm.doctorId = item.doctor.id;
   appointmentForm.symptom = consultForm.symptom.trim();
+  browsedHospitalId.value = item.hospital.id;
+  browsedRoomId.value = item.room.id;
   applyLoggedInUserToAppointment();
+  appointmentStep.value = 3;
 }
 
 async function saveCurrentRecord() {
@@ -1244,6 +1901,26 @@ async function cancelSelectedAppointment(item) {
   await removeRecord(() => cancelAppointment(item.id), "预约已取消");
 }
 
+async function cancelHomeAppointment(item) {
+  const confirmed = await confirmDanger(`确认取消“${item.patientName}”的预约吗？`, "取消预约");
+
+  if (!confirmed) {
+    return;
+  }
+
+  isLoadingCatalog.value = true;
+
+  try {
+    await cancelMyAppointment(item.id);
+    await loadHomeAppointments();
+    ElMessage.success("预约已取消");
+  } catch (error) {
+    ElMessage.error(error.message || "取消预约失败");
+  } finally {
+    isLoadingCatalog.value = false;
+  }
+}
+
 async function removeAppointment(item) {
   const confirmed = await confirmDanger(`确认删除“${item.patientName}”的预约记录吗？`, "删除预约");
 
@@ -1307,6 +1984,8 @@ onMounted(() => {
     loadAdminCatalog();
   } else if (currentView.value === "appointment") {
     loadAppointmentResources();
+  } else if (currentView.value === "home" && isLoggedIn.value && !isAdminUser.value) {
+    loadHomeAppointments();
   }
 });
 </script>
@@ -1340,52 +2019,77 @@ onMounted(() => {
         </p>
 
         <div v-if="!isLoggedIn" class="auth-panel">
-          <div class="auth-tabs">
-            <button
-              type="button"
-              :class="{ active: authMode === 'login' }"
-              @click="switchAuthMode('login')"
-            >
-              手机号登录
-            </button>
-            <button
-              type="button"
-              :class="{ active: authMode === 'register' }"
-              @click="switchAuthMode('register')"
-            >
-              注册普通用户
-            </button>
+          <div class="auth-panel-header">
+            <template v-if="authMode !== AUTH_MODE_ADMIN">
+              <div class="auth-entry-row">
+                <button
+                  type="button"
+                  class="admin-entry-button"
+                  @click="switchAuthMode(AUTH_MODE_ADMIN)"
+                >
+                  管理入口
+                </button>
+              </div>
+              <div class="auth-tabs">
+                <button
+                  type="button"
+                  :class="{ active: authMode === AUTH_MODE_LOGIN }"
+                  @click="switchAuthMode(AUTH_MODE_LOGIN)"
+                >
+                  手机号登录
+                </button>
+                <button
+                  type="button"
+                  :class="{ active: authMode === AUTH_MODE_REGISTER }"
+                  @click="switchAuthMode(AUTH_MODE_REGISTER)"
+                >
+                  注册普通用户
+                </button>
+              </div>
+            </template>
+            <div v-else class="admin-auth-header">
+              <button type="button" class="admin-back-button" @click="switchAuthMode(AUTH_MODE_LOGIN)">
+                <span class="admin-back-icon" aria-hidden="true">‹</span>
+                <span>返回</span>
+              </button>
+              <span class="admin-auth-title">管理入口</span>
+            </div>
           </div>
 
-          <el-form label-position="top" class="auth-form">
-            <el-form-item v-if="authMode === 'register'" label="姓名">
+          <el-form label-position="top" class="auth-form" @submit.prevent="submitAuth">
+            <el-form-item v-if="authMode === AUTH_MODE_REGISTER" label="姓名">
               <el-input v-model="authForm.name" placeholder="请输入姓名" />
             </el-form-item>
-            <el-form-item label="手机号">
+            <el-form-item v-if="authMode !== AUTH_MODE_ADMIN" label="手机号">
               <el-input v-model="authForm.phone" maxlength="11" placeholder="请输入手机号" />
             </el-form-item>
-            <el-form-item label="密码">
+            <el-form-item :label="authMode === AUTH_MODE_ADMIN ? '管理员口令' : '密码'">
               <el-input
                 v-model="authForm.password"
                 type="password"
                 show-password
-                placeholder="请输入密码"
+                :placeholder="authMode === AUTH_MODE_ADMIN ? '请输入管理员口令' : '请输入密码'"
                 @keyup.enter="submitAuth"
               />
             </el-form-item>
-            <el-button type="primary" class="home-button" :loading="isAuthenticating" @click="submitAuth">
-              {{ authMode === "register" ? "注册并登录" : "登录" }}
+            <el-button
+              type="primary"
+              native-type="submit"
+              class="home-button"
+              :class="{ 'admin-submit-button': authMode === AUTH_MODE_ADMIN }"
+              :loading="isAuthenticating"
+              @click="submitAuth"
+            >
+              {{ authMode === AUTH_MODE_REGISTER ? "注册并登录" : authMode === AUTH_MODE_ADMIN ? "进入后台" : "登录" }}
             </el-button>
           </el-form>
-
-          <p class="auth-hint">管理员账号：13800000000 / admin123456；注册入口只会创建普通用户。</p>
         </div>
 
         <div v-else class="user-switch-panel">
           <div>
             <p class="entity-tag">{{ isAdminUser ? "管理员" : "普通用户" }}</p>
             <h3>{{ currentUser.name }}</h3>
-            <p>{{ currentUser.phone }}</p>
+            <p>{{ isAdminUser ? "专用管理入口已登录" : currentUser.phone }}</p>
           </div>
           <el-button plain @click="logoutCurrentUser">切换用户</el-button>
         </div>
@@ -1401,6 +2105,56 @@ onMounted(() => {
             <span class="button-label">后台管理</span>
           </el-button>
         </div>
+
+        <section v-if="isLoggedIn && !isAdminUser" class="home-appointments-panel">
+          <div class="home-appointments-header">
+            <div>
+              <p class="entity-tag">我的预约</p>
+              <h3>首页快速查看预约记录</h3>
+            </div>
+            <el-button plain @click="loadHomeAppointments">刷新</el-button>
+          </div>
+
+          <div v-if="homeAppointments.length" class="home-appointments-list">
+            <article
+              v-for="appointment in homeAppointments"
+              :key="appointment.id"
+              class="home-appointment-card"
+            >
+              <div class="home-appointment-top">
+                <div>
+                  <h4>{{ appointment.hospitalName }} / {{ appointment.roomName }}</h4>
+                  <p>{{ appointment.doctorName }}{{ appointment.doctorTitle ? ` · ${appointment.doctorTitle}` : "" }}</p>
+                </div>
+                <span class="home-appointment-status" :class="{ canceled: appointment.status !== '已预约' }">
+                  {{ appointment.status }}
+                </span>
+              </div>
+              <p class="home-appointment-time">{{ appointment.appointmentDate }} · {{ appointment.timeSlot }}</p>
+              <p v-if="appointment.hospitalLocation" class="home-appointment-meta">
+                医院位置：{{ appointment.hospitalLocation }}
+              </p>
+              <p v-if="appointment.roomFloor" class="home-appointment-meta">
+                诊室楼层：{{ appointment.roomFloor }}
+              </p>
+              <p class="home-appointment-meta">就诊人：{{ appointment.patientName }} · {{ appointment.patientPhone }}</p>
+              <p v-if="appointment.symptom" class="home-appointment-meta">症状：{{ appointment.symptom }}</p>
+              <div class="home-appointment-actions">
+                <el-button
+                  v-if="appointment.status === '已预约'"
+                  type="danger"
+                  plain
+                  @click="cancelHomeAppointment(appointment)"
+                >
+                  取消预约
+                </el-button>
+              </div>
+            </article>
+          </div>
+          <div v-else class="home-appointments-empty">
+            暂无预约记录，选择医院、诊室和医生后即可提交挂号。
+          </div>
+        </section>
       </section>
     </template>
 
@@ -1488,167 +2242,380 @@ onMounted(() => {
         <header class="appointment-header">
           <div>
             <p class="module-eyebrow">挂号预约</p>
-            <h2>选择就诊资源</h2>
-            <p class="module-copy">按医院、诊室和医生提交预约，后台可统一查看和处理预约记录。</p>
+            <h2>按步骤完成预约</h2>
+            <p class="module-copy">从医院到诊室，再到医生与预约日期，逐级查看详细介绍后再提交预约。</p>
           </div>
           <el-button plain @click="goHome">返回首页</el-button>
         </header>
 
-        <div class="appointment-layout">
-          <section class="appointment-panel">
-            <el-form label-position="top" class="editor-form">
-              <div class="form-grid three-columns">
-                <el-form-item label="医院">
-                  <el-select
-                    v-model="appointmentForm.hospitalId"
-                    placeholder="请选择医院"
-                    @change="syncAppointmentRoomOptions"
-                  >
-                    <el-option
-                      v-for="option in hospitalOptions"
-                      :key="option.value"
-                      :label="option.label"
-                      :value="option.value"
-                    />
-                  </el-select>
-                </el-form-item>
-                <el-form-item label="诊室">
-                  <el-select
-                    v-model="appointmentForm.roomId"
-                    placeholder="请选择诊室"
-                    @change="syncAppointmentDoctorOptions"
-                  >
-                    <el-option
-                      v-for="option in appointmentRoomOptions"
-                      :key="option.value"
-                      :label="option.label"
-                      :value="option.value"
-                    />
-                  </el-select>
-                </el-form-item>
-                <el-form-item label="医生">
-                  <el-select v-model="appointmentForm.doctorId" placeholder="请选择医生" @change="loadAppointmentQuota">
-                    <el-option
-                      v-for="option in appointmentDoctorOptions"
-                      :key="option.value"
-                      :label="option.label"
-                      :value="option.value"
-                    />
-                  </el-select>
-                </el-form-item>
-              </div>
-
-              <div class="form-grid two-columns">
-                <el-form-item label="就诊人姓名">
-                  <el-input v-model="appointmentForm.patientName" placeholder="请输入姓名" />
-                </el-form-item>
-                <el-form-item label="联系电话">
-                  <el-input
-                    v-model="appointmentForm.patientPhone"
-                    :disabled="!isAdminUser"
-                    :placeholder="isAdminUser ? '请输入联系电话' : '登录手机号'"
-                  />
-                </el-form-item>
-              </div>
-
-              <div class="form-grid two-columns">
-                <el-form-item label="预约日期">
-                  <el-date-picker
-                    v-model="appointmentForm.appointmentDate"
-                    type="date"
-                    value-format="YYYY-MM-DD"
-                    placeholder="请选择日期"
-                    @change="loadAppointmentQuota"
-                  />
-                </el-form-item>
-                <el-form-item label="预约时段">
-                  <el-select v-model="appointmentForm.timeSlot" @change="syncAppointmentDoctorOptions">
-                    <el-option
-                      v-for="option in workTimeOptions"
-                      :key="option"
-                      :label="option"
-                      :value="option"
-                    />
-                  </el-select>
-                </el-form-item>
-              </div>
-
-              <el-form-item label="症状说明">
-                <el-input
-                  v-model="appointmentForm.symptom"
-                  type="textarea"
-                  :rows="4"
-                  maxlength="500"
-                  show-word-limit
-                  placeholder="可简单描述症状或就诊诉求"
-                />
-              </el-form-item>
-
-              <div class="appointment-actions">
-                <el-button plain @click="loadAppointmentResources">刷新资源</el-button>
-                <el-button
-                  type="primary"
-                  :loading="isSubmittingAppointment"
-                  :disabled="isAppointmentSlotFull || isCurrentSlotBooked"
-                  @click="submitAppointment"
-                >
-                  {{ isCurrentSlotBooked ? "已预约" : "提交预约" }}
-                </el-button>
-              </div>
-            </el-form>
-
-            <section v-if="appointmentDoctorCards.length" class="doctor-appointment-list">
-              <article
-                v-for="doctor in appointmentDoctorCards"
-                :key="doctor.id"
-                class="doctor-appointment-card"
-                :class="{ active: doctor.id === Number(appointmentForm.doctorId) }"
+        <div class="appointment-layout appointment-flow-layout">
+          <section class="appointment-panel appointment-flow-panel">
+            <div class="appointment-stepbar">
+              <button
+                v-for="item in appointmentStepItems"
+                :key="item.step"
+                type="button"
+                class="appointment-step-pill"
+                :class="{
+                  active: item.step === appointmentStep,
+                  available: item.step <= appointmentMaxUnlockedStep,
+                }"
+                @click="openAppointmentStep(item.step)"
               >
-                <div>
-                  <p class="entity-tag">{{ doctor.title }}</p>
-                  <h4>{{ doctor.name }}</h4>
-                  <p>{{ doctor.specialty }}</p>
-                  <span>{{ doctor.workTimeSlot }}</span>
-                </div>
-                <el-button
-                  type="primary"
-                  plain
-                  :disabled="isSlotBooked(doctor.id, appointmentForm.appointmentDate, doctor.workTimeSlot)"
-                  @click="selectDoctorSlot(doctor)"
-                >
-                  {{
-                    isSlotBooked(doctor.id, appointmentForm.appointmentDate, doctor.workTimeSlot)
-                      ? "已预约"
-                      : "预约"
-                  }}
+                <span class="appointment-step-number">0{{ item.step }}</span>
+                <span class="appointment-step-copy">
+                  <strong>{{ item.label }}</strong>
+                  <small>{{ item.hint }}</small>
+                </span>
+              </button>
+            </div>
+
+            <div class="appointment-stage-header">
+              <div>
+                <p class="entity-tag">第 {{ appointmentStep }} 步</p>
+                <h3>{{ getAppointmentStepTitle() }}</h3>
+                <p>{{ getAppointmentStepDescription() }}</p>
+              </div>
+              <div class="appointment-stage-nav">
+                <el-button v-if="appointmentStep > 1" plain @click="openAppointmentStep(appointmentStep - 1)">
+                  上一步
                 </el-button>
-              </article>
-            </section>
+              </div>
+            </div>
+
+            <template v-if="appointmentStep === 1">
+              <div v-if="appointmentHospitals.length" class="appointment-stage-list appointment-hospital-list">
+                <article
+                  v-for="hospital in appointmentHospitals"
+                  :key="hospital.id"
+                  class="appointment-resource-card"
+                  :class="{ active: hospital.id === Number(appointmentForm.hospitalId) }"
+                >
+                  <div class="appointment-resource-top">
+                    <div>
+                      <p class="entity-tag">{{ hospital.level || "医院" }}</p>
+                      <h4>{{ hospital.name }}</h4>
+                    </div>
+                    <span class="appointment-count-badge">
+                      {{ getHospitalRooms(hospital.id).length }} 个诊室 / {{ getHospitalDoctors(hospital.id).length }} 位医生
+                    </span>
+                  </div>
+                  <p class="appointment-location">地址：{{ hospital.location || "暂未填写具体地址" }}</p>
+                  <p class="appointment-copy">{{ hospital.shortIntro || "可先通过地址、医院等级和诊室配置判断是否适合就诊。" }}</p>
+                  <p class="appointment-detail">{{ hospital.detailIntro || hospital.shortIntro || "该医院暂未补充更多介绍信息。" }}</p>
+
+                  <div v-if="isHospitalPreviewExpanded(hospital.id)" class="appointment-resource-section">
+                    <h5>医院所属诊室预览</h5>
+                    <div v-if="getHospitalRooms(hospital.id).length" class="appointment-nested-list">
+                      <article
+                        v-for="room in getHospitalRooms(hospital.id)"
+                        :key="room.id"
+                        class="appointment-nested-card"
+                      >
+                        <div class="appointment-nested-top">
+                          <strong>{{ room.name }}</strong>
+                          <span>{{ room.floor || "楼层待补充" }}</span>
+                        </div>
+                        <p>{{ room.shortIntro || "该诊室已开放预约，可继续查看详情后进入下一步筛选。" }}</p>
+                      </article>
+                    </div>
+                    <div v-else class="appointment-empty-state">
+                      当前医院还没有可选诊室。
+                    </div>
+                  </div>
+
+                  <div class="appointment-card-footer">
+                    <div class="detail-line">先看详情，确认医院后再继续筛选诊室。</div>
+                    <div class="appointment-card-actions">
+                      <el-button plain @click="showHospitalDetails(hospital.id)">查看医院详情</el-button>
+                      <el-button plain @click="toggleHospitalPreview(hospital.id)">
+                        {{ isHospitalPreviewExpanded(hospital.id) ? "收起诊室" : "展开诊室" }}
+                      </el-button>
+                      <el-button type="primary" @click="selectAppointmentHospital(hospital)">
+                        选择这家医院
+                      </el-button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+              <div v-else class="appointment-empty-state">
+                当前还没有可预约的医院资源。
+              </div>
+            </template>
+
+            <template v-else-if="appointmentStep === 2">
+              <div v-if="selectedAppointmentHospital" class="appointment-stage-focus">
+                <p class="entity-tag">已选医院</p>
+                <h4>{{ selectedAppointmentHospital.name }}</h4>
+                <p>{{ selectedAppointmentHospital.level || "医院" }} · {{ selectedAppointmentHospital.location || "地址待补充" }}</p>
+                <div class="detail-line">{{ selectedAppointmentHospital.shortIntro || "继续选择更合适的诊室。" }}</div>
+              </div>
+
+              <div v-if="selectedAppointmentHospitalRooms.length" class="appointment-stage-list appointment-room-list">
+                <article
+                  v-for="room in selectedAppointmentHospitalRooms"
+                  :key="room.id"
+                  class="appointment-resource-card"
+                  :class="{ active: room.id === Number(appointmentForm.roomId) }"
+                >
+                  <div class="appointment-resource-top">
+                    <div>
+                      <p class="entity-tag">{{ room.floor || "诊室" }}</p>
+                      <h4>{{ room.name }}</h4>
+                    </div>
+                    <span class="appointment-count-badge">
+                      {{ getRoomDoctors(room.id).length }} 位医生
+                    </span>
+                  </div>
+                  <p class="appointment-copy">{{ room.shortIntro || "可根据诊室方向、楼层位置和医生配置进一步筛选。" }}</p>
+                  <p class="appointment-detail">{{ room.detailIntro || room.shortIntro || "该诊室暂未补充更多介绍信息。" }}</p>
+
+                  <div v-if="isRoomDoctorPreviewExpanded(room.id)" class="appointment-resource-section">
+                    <h5>诊室所属医生</h5>
+                    <div v-if="getRoomDoctors(room.id).length" class="appointment-doctor-preview">
+                      <article
+                        v-for="doctor in getRoomDoctors(room.id)"
+                        :key="doctor.id"
+                        class="appointment-inline-doctor"
+                      >
+                        <strong>{{ doctor.name }}</strong>
+                        <span>{{ doctor.title }} · {{ doctor.specialty }}</span>
+                        <span>{{ doctor.workTimeSlot }}</span>
+                      </article>
+                    </div>
+                    <div v-else class="appointment-empty-state">
+                      当前诊室还没有医生排班。
+                    </div>
+                  </div>
+
+                  <div class="appointment-card-footer">
+                    <div class="appointment-card-actions">
+                      <el-button plain @click="showRoomDetails(room.id)">查看诊室详情</el-button>
+                      <el-button plain @click="toggleRoomDoctorPreview(room.id)">
+                        {{ isRoomDoctorPreviewExpanded(room.id) ? "收起医生列表" : "展开医生列表" }}
+                      </el-button>
+                      <el-button type="primary" @click="selectAppointmentRoom(room)">
+                        选择这个诊室
+                      </el-button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+              <div v-else class="appointment-empty-state">
+                当前医院暂无可选诊室，请返回上一步重新选择医院。
+              </div>
+            </template>
+
+            <template v-else-if="appointmentStep === 3">
+              <div v-if="selectedAppointmentHospital && selectedAppointmentRoom" class="appointment-stage-focus">
+                <p class="entity-tag">当前路径</p>
+                <h4>{{ selectedAppointmentHospital.name }} / {{ selectedAppointmentRoom.name }}</h4>
+                <p>{{ selectedAppointmentRoom.floor || "楼层待补充" }}</p>
+                <div class="detail-line">{{ selectedAppointmentRoom.shortIntro || "先选日期，再继续挑选医生。" }}</div>
+              </div>
+
+              <div class="appointment-date-toolbar">
+                <div>
+                  <p class="entity-tag">预约日期</p>
+                  <p>仅展示今天起未来 {{ APPOINTMENT_DATE_FUTURE_DAYS }} 天的预约情况，直接点击下方日期卡片完成选择。</p>
+                </div>
+              </div>
+
+              <div v-if="appointmentDateSummaries.length" class="appointment-date-grid">
+                <button
+                  v-for="summary in appointmentDateSummaries"
+                  :key="summary.date"
+                  type="button"
+                  class="appointment-date-card"
+                  :class="[
+                    `appointment-date-card--${summary.status}`,
+                    { active: summary.date === appointmentForm.appointmentDate, disabled: summary.status === 'full' },
+                  ]"
+                  :disabled="summary.status === 'full'"
+                  @click="toggleAppointmentDate(summary.date)"
+                >
+                  <strong>{{ formatAppointmentCardDate(summary.date) }}</strong>
+                  <span>{{ formatAppointmentCardWeekday(summary.date) }}</span>
+                  <em>{{ summary.label }}</em>
+                  <small>{{ getDateSummaryLine(summary.date) }}</small>
+                </button>
+              </div>
+
+              <div v-if="isLoadingAppointmentCalendar" class="appointment-inline-note">
+                正在加载今天起未来 {{ APPOINTMENT_DATE_FUTURE_DAYS }} 天号源，下方日期卡片会直接显示可约医生数和剩余号。
+              </div>
+              <div v-else-if="!appointmentDateSummaries.length" class="appointment-inline-note">
+                当前诊室暂无可展示的日期号源信息。
+              </div>
+              <div v-if="!appointmentForm.appointmentDate" class="appointment-inline-note">
+                还没有选择预约日期，系统暂时无法判断对应号源余量。
+              </div>
+
+              <div v-if="!appointmentForm.appointmentDate" class="appointment-empty-state">
+                请先选择预约日期，选定后再查看医生介绍和可预约时段。
+              </div>
+              <div v-else-if="selectedAppointmentRoomDoctors.length" class="appointment-stage-list appointment-doctor-list">
+                <article
+                  v-for="doctor in selectedAppointmentRoomDoctors"
+                  :key="doctor.id"
+                  class="appointment-resource-card appointment-resource-card--doctor"
+                  :class="{ active: doctor.id === Number(appointmentForm.doctorId) }"
+                >
+                  <div class="appointment-resource-top">
+                    <div>
+                      <p class="entity-tag">{{ doctor.title }}</p>
+                      <h4>{{ doctor.name }}</h4>
+                    </div>
+                    <span class="appointment-count-badge">{{ doctor.workTimeSlot }}</span>
+                  </div>
+                  <div class="appointment-doctor-meta">
+                    <span>擅长方向：{{ doctor.specialty }}</span>
+                    <span>所属诊室：{{ doctor.roomName }}</span>
+                    <span v-if="appointmentForm.appointmentDate && getDoctorQuotaForSelectedDate(doctor.id)">
+                      余号：{{ getDoctorQuotaForSelectedDate(doctor.id).remainingCount }}/{{ getDoctorQuotaForSelectedDate(doctor.id).capacity }}
+                    </span>
+                  </div>
+                  <p class="appointment-copy">{{ doctor.shortIntro || "可结合职称、擅长方向和接诊时段决定是否预约。" }}</p>
+                  <p class="appointment-detail">{{ doctor.detailIntro || doctor.shortIntro || "该医生暂未补充更多个人介绍。" }}</p>
+                  <div v-if="appointmentForm.appointmentDate" class="appointment-inline-note appointment-inline-note--compact">
+                    <template v-if="getDoctorQuotaForSelectedDate(doctor.id)">
+                      {{ appointmentForm.appointmentDate }} · {{ doctor.workTimeSlot }} ·
+                      <span v-if="getDoctorQuotaForSelectedDate(doctor.id).remainingCount > 0">
+                        还剩 {{ getDoctorQuotaForSelectedDate(doctor.id).remainingCount }} 个号
+                      </span>
+                      <span v-else>当前日期已满号</span>
+                    </template>
+                    <template v-else>
+                      正在获取该医生在所选日期的剩余号源。
+                    </template>
+                  </div>
+
+                  <div class="appointment-card-footer">
+                    <div class="detail-line">选择后会进入最后一步，填写就诊人信息并提交预约。</div>
+                    <el-button
+                      type="primary"
+                      plain
+                      :disabled="getDoctorQuotaForSelectedDate(doctor.id)?.remainingCount === 0"
+                      @click="selectAppointmentDoctor(doctor)"
+                    >
+                      {{
+                        getDoctorQuotaForSelectedDate(doctor.id)?.remainingCount === 0
+                          ? "当日已满"
+                          : "选择这位医生"
+                      }}
+                    </el-button>
+                  </div>
+                </article>
+              </div>
+              <div v-else class="appointment-empty-state">
+                当前诊室暂无可预约医生，请返回上一步重新选择诊室。
+              </div>
+            </template>
+
+            <template v-else>
+              <div v-if="selectedAppointmentDoctor" class="appointment-stage-focus">
+                <p class="entity-tag">最终确认</p>
+                <h4>{{ selectedAppointmentHospital?.name }} / {{ selectedAppointmentRoom?.name }} / {{ selectedAppointmentDoctor.name }}</h4>
+                <p>{{ appointmentForm.appointmentDate || "未选日期" }} · {{ appointmentForm.timeSlot }}</p>
+                <div class="detail-line">{{ selectedAppointmentDoctor.specialty }}</div>
+              </div>
+
+              <div class="appointment-review-grid">
+                <article class="appointment-review-card">
+                  <p class="entity-tag">医院</p>
+                  <h4>{{ selectedAppointmentHospital?.name || "未选择医院" }}</h4>
+                  <p>{{ selectedAppointmentHospital?.location || "请返回前一步选择医院" }}</p>
+                </article>
+                <article class="appointment-review-card">
+                  <p class="entity-tag">诊室</p>
+                  <h4>{{ selectedAppointmentRoom?.name || "未选择诊室" }}</h4>
+                  <p>{{ selectedAppointmentRoom?.shortIntro || "请返回前一步选择诊室" }}</p>
+                </article>
+                <article class="appointment-review-card">
+                  <p class="entity-tag">医生与时段</p>
+                  <h4>{{ selectedAppointmentDoctor?.name || "未选择医生" }}</h4>
+                  <p>{{ appointmentForm.appointmentDate || "未选日期" }} · {{ appointmentForm.timeSlot || "未选时段" }}</p>
+                </article>
+              </div>
+
+              <el-form label-position="top" class="editor-form appointment-final-form">
+                <div class="form-grid two-columns">
+                  <el-form-item label="就诊人姓名">
+                    <el-input v-model="appointmentForm.patientName" placeholder="请输入姓名" />
+                  </el-form-item>
+                  <el-form-item label="联系电话">
+                    <el-input
+                      v-model="appointmentForm.patientPhone"
+                      :disabled="!isAdminUser"
+                      :placeholder="isAdminUser ? '请输入联系电话' : '登录手机号'"
+                    />
+                  </el-form-item>
+                </div>
+
+                <el-form-item label="症状说明">
+                  <el-input
+                    v-model="appointmentForm.symptom"
+                    type="textarea"
+                    :rows="4"
+                    maxlength="500"
+                    show-word-limit
+                    placeholder="可简单描述症状、病程或本次就诊诉求"
+                  />
+                </el-form-item>
+
+                <div class="appointment-actions">
+                  <el-button plain @click="openAppointmentStep(3)">修改医生与日期</el-button>
+                  <el-button plain @click="loadAppointmentResources">刷新资源</el-button>
+                  <el-button
+                    type="primary"
+                    :loading="isSubmittingAppointment"
+                    :disabled="isAppointmentSlotFull || isCurrentSlotBooked"
+                    @click="submitAppointment"
+                  >
+                    {{ isCurrentSlotBooked ? "已预约" : "提交预约" }}
+                  </el-button>
+                </div>
+              </el-form>
+            </template>
           </section>
 
-          <aside class="appointment-summary">
-            <p class="entity-tag">当前选择</p>
-            <h3>{{ getHospitalName(appointmentForm.hospitalId) }}</h3>
-            <p>{{ getRoomName(appointmentForm.roomId) }}</p>
-            <p>
-              {{
-                selectedAppointmentDoctor?.name ?? "未选择医生"
-              }}
-            </p>
-            <div v-if="selectedAppointmentDoctor" class="detail-line">
-              单时段容量：10 人
+          <aside class="appointment-summary appointment-flow-summary">
+            <div v-if="appointmentFocusedHospital" class="appointment-summary-section">
+              <p class="entity-tag">医院详情</p>
+              <h3>{{ appointmentFocusedHospital.name }}</h3>
+              <p>{{ appointmentFocusedHospital.level || "医院" }}</p>
+              <p>{{ appointmentFocusedHospital.location || "地址待补充" }}</p>
+              <div class="detail-line">{{ appointmentFocusedHospital.shortIntro || "请结合医院位置和资源配置决定是否继续预约。" }}</div>
+              <div class="detail-line">
+                下设 {{ appointmentFocusedHospitalRooms.length }} 个诊室，当前排班 {{ appointmentFocusedHospitalDoctors.length }} 位医生。
+              </div>
             </div>
-            <div v-if="appointmentQuota" class="detail-line">
-              已约 {{ appointmentQuota.reservedCount }} 人，剩余 {{ appointmentQuota.remainingCount }} 个名额
+
+            <div v-if="appointmentFocusedRoom" class="appointment-summary-section">
+              <p class="entity-tag">诊室详情</p>
+              <h3>{{ appointmentFocusedRoom.name }}</h3>
+              <p>{{ appointmentFocusedRoom.floor || "楼层待补充" }}</p>
+              <div class="detail-line">{{ appointmentFocusedRoom.shortIntro || "当前诊室暂无简介。" }}</div>
+              <div class="detail-line">该诊室共有 {{ appointmentFocusedRoomDoctors.length }} 位可选医生。</div>
             </div>
-            <div v-if="isCurrentSlotBooked" class="detail-line booked-line">
-              你已预约该医生当前时间段。
+
+            <div v-if="selectedAppointmentDoctor" class="appointment-summary-section">
+              <p class="entity-tag">医生详情</p>
+              <h3>{{ selectedAppointmentDoctor.name }}</h3>
+              <p>{{ selectedAppointmentDoctor.title }} · {{ selectedAppointmentDoctor.specialty }}</p>
+              <div class="detail-line">{{ selectedAppointmentDoctor.shortIntro || "该医生暂未补充更多介绍。" }}</div>
+              <div class="detail-line">接诊时段：{{ selectedAppointmentDoctor.workTimeSlot }}</div>
             </div>
-            <div v-else-if="selectedAppointmentDoctor" class="detail-line">
-              选择预约日期后可查看剩余名额。
+
+            <div v-if="appointmentQuota" class="appointment-summary-section">
+              <p class="entity-tag">号源状态</p>
+              <div class="detail-line">单时段容量：{{ appointmentQuota.capacity }} 人</div>
+              <div class="detail-line">已约 {{ appointmentQuota.reservedCount }} 人，剩余 {{ appointmentQuota.remainingCount }} 个名额</div>
             </div>
-            <div class="detail-line">
-              预约提交后会进入后台预约管理，工作人员可查看或取消记录。
+
+            <div v-if="isCurrentSlotBooked" class="appointment-summary-section">
+              <p class="entity-tag">预约提醒</p>
+              <div class="detail-line booked-line">你已预约该医生当前时间段，不能重复预约。</div>
             </div>
           </aside>
         </div>

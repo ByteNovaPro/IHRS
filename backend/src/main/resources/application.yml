@@ -30,5 +30,8 @@ server:
   port: 8080
 
 app:
+  admin:
+    phone: ${ADMIN_PHONE:13800000000}
+    password: ${ADMIN_PASSWORD:040130}
   agent:
     service-url: ${AGENT_SERVICE_URL:http://localhost:8000}

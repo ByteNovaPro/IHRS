@@ -24,7 +24,7 @@ public class AuthInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        if (path.equals("/api/appointments/quota")) {
+        if (path.equals("/api/appointments/quota") || path.equals("/api/appointments/quota-calendar")) {
             return requireLogin(request, response, false);
         }
 

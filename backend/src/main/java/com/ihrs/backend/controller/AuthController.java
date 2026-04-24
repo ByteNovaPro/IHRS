@@ -45,7 +45,7 @@ public class AuthController {
         if (user == null) {
             return null;
         }
-        return new AuthResponse(resolveToken(request), user.phone(), user.name(), user.role());
+        return new AuthResponse(resolveToken(request), user.id(), user.phone(), user.name(), user.role());
     }
 
     private String resolveToken(HttpServletRequest request) {
