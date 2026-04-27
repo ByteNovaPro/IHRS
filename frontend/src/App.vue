@@ -1,30 +1,39 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
   cancelAppointment,
   cancelMyAppointment,
   clearStoredAuth,
-  consultSymptom,
+  consultSymptomStream,
   createAppointment,
   createDoctor,
   createHospital,
   createRoom,
   deleteAppointment,
+  deleteConsultConversation,
   deleteDoctor,
   deleteHospital,
   deleteRoom,
+  getConsultSession,
   getAppointmentQuota,
   getAppointmentQuotaCalendar,
+  getAuthExpiredEventName,
+  getRagStats,
   getStoredAuth,
+  listAdminDoctors,
+  listAdminHospitals,
+  listAdminRooms,
   listAdminAppointments,
   listDoctors,
   listHospitals,
   listAppointments,
+  listRagDocuments,
   listRooms,
   login,
   logout,
   register,
+  searchRagDocuments,
   storeAuth,
   updateDoctor,
   updateHospital,
@@ -39,10 +48,10 @@ const savedView =
 const savedModule =
   typeof window !== "undefined" ? window.localStorage.getItem(MODULE_STORAGE_KEY) : null;
 
-const validViews = ["home", "admin", "appointment", "consult"];
+const validViews = ["home", "admin", "appointment", "consult", "rag"];
 const validModules = ["hospital", "room", "doctor", "appointment"];
 const initialRoute = getRouteState();
-const currentView = ref(initialRoute.view ?? (["admin", "appointment", "consult"].includes(savedView) ? savedView : "home"));
+const currentView = ref(initialRoute.view ?? (["admin", "appointment", "consult", "rag"].includes(savedView) ? savedView : "home"));
 const activeModule = ref(initialRoute.module ?? (validModules.includes(savedModule) ? savedModule : "hospital"));
 let isApplyingBrowserRoute = false;
 
@@ -50,6 +59,9 @@ const hospitals = ref([]);
 const rooms = ref([]);
 const doctors = ref([]);
 const appointments = ref([]);
+const adminHospitals = ref([]);
+const adminRooms = ref([]);
+const adminDoctors = ref([]);
 const userAppointments = ref([]);
 const isLoadingCatalog = ref(false);
 const isSavingRecord = ref(false);
@@ -61,6 +73,7 @@ const currentUser = ref(getStoredAuth());
 const AUTH_MODE_LOGIN = "login";
 const AUTH_MODE_REGISTER = "register";
 const AUTH_MODE_ADMIN = "admin";
+const AUTH_EXPIRED_EVENT = getAuthExpiredEventName();
 
 const ADMIN_PHONE = "13800000000";
 
@@ -134,6 +147,60 @@ const workTimeOptions = [
   "下午 16:00-17:30",
 ];
 const APPOINTMENT_DATE_FUTURE_DAYS = 15;
+const CONSULT_REGION_CITY_ALIASES = {
+  广东: ["广州", "深圳"],
+  广东省: ["广州", "深圳"],
+  浙江: ["杭州", "宁波"],
+  浙江省: ["杭州", "宁波"],
+  江苏: ["南京", "苏州"],
+  江苏省: ["南京", "苏州"],
+  山东: ["济南", "青岛"],
+  山东省: ["济南", "青岛"],
+  福建: ["福州", "厦门"],
+  福建省: ["福州", "厦门"],
+  湖南: ["长沙"],
+  湖南省: ["长沙"],
+  湖北: ["武汉"],
+  湖北省: ["武汉"],
+  河南: ["郑州"],
+  河南省: ["郑州"],
+  安徽: ["合肥"],
+  安徽省: ["合肥"],
+  四川: ["成都"],
+  四川省: ["成都"],
+  陕西: ["西安"],
+  陕西省: ["西安"],
+  上海: ["上海"],
+  上海市: ["上海"],
+  北京: ["北京"],
+  北京市: ["北京"],
+  天津: ["天津"],
+  天津市: ["天津"],
+  重庆: ["重庆"],
+  重庆市: ["重庆"],
+};
+const CONSULT_DIRECT_CITY_HINTS = [
+  "上海",
+  "北京",
+  "广州",
+  "深圳",
+  "杭州",
+  "南京",
+  "苏州",
+  "成都",
+  "重庆",
+  "武汉",
+  "西安",
+  "天津",
+  "长沙",
+  "郑州",
+  "青岛",
+  "合肥",
+  "宁波",
+  "厦门",
+  "福州",
+  "济南",
+];
 
 const appointmentForm = reactive({
   hospitalId: null,
@@ -164,6 +231,24 @@ const consultForm = reactive({
 
 const consultResult = ref(null);
 const consultRecommendations = ref([]);
+const consultMessages = ref([]);
+const activeConsultSymptom = ref("");
+const consultConversationId = ref("");
+const consultRecommendationRequested = ref(false);
+const consultRecommendationCollapseNames = ref([]);
+const consultChatViewport = ref(null);
+const activeConsultAssistantMessageId = ref("");
+let consultMessageSequence = 0;
+const ragStats = ref(null);
+const ragDocuments = ref([]);
+const ragSearchResults = ref([]);
+const isLoadingRag = ref(false);
+const isSearchingRag = ref(false);
+const ragDocumentLimit = ref(12);
+const ragSearchForm = reactive({
+  query: "",
+  topK: 5,
+});
 const appointmentQuota = ref(null);
 const appointmentCalendarQuotas = ref([]);
 const isLoadingAppointmentCalendar = ref(false);
@@ -173,6 +258,11 @@ const filters = reactive({
   hospitalId: "",
   roomId: "",
   workTimeSlot: "",
+});
+const adminPagination = reactive({
+  hospital: { page: 1, size: 12, total: 0 },
+  room: { page: 1, size: 12, total: 0 },
+  doctor: { page: 1, size: 12, total: 0 },
 });
 
 const currentTitle = computed(() => moduleMeta[activeModule.value].title);
@@ -318,47 +408,9 @@ const bookedSlotKeys = computed(
 const isCurrentSlotBooked = computed(() =>
   isSlotBooked(appointmentForm.doctorId, appointmentForm.appointmentDate, appointmentForm.timeSlot),
 );
-const normalizedKeyword = computed(() => filters.keyword.trim().toLowerCase());
-const visibleHospitals = computed(() =>
-  hospitals.value
-    .filter(Boolean)
-    .filter((hospital) => matchesKeyword([
-      hospital.name,
-      hospital.level,
-      hospital.location,
-      hospital.shortIntro,
-      hospital.detailIntro,
-    ])),
-);
-const visibleRooms = computed(() =>
-  rooms.value
-    .filter(Boolean)
-    .filter((room) => !filters.hospitalId || room.hospitalId === Number(filters.hospitalId))
-    .filter((room) => matchesKeyword([
-      room.name,
-      room.floor,
-      getHospitalName(room.hospitalId),
-      room.shortIntro,
-      room.detailIntro,
-    ])),
-);
-const visibleDoctors = computed(() =>
-  doctors.value
-    .filter(Boolean)
-    .filter((doctor) => !filters.hospitalId || doctor.hospitalId === Number(filters.hospitalId))
-    .filter((doctor) => !filters.roomId || doctor.roomId === Number(filters.roomId))
-    .filter((doctor) => !filters.workTimeSlot || doctor.workTimeSlot === filters.workTimeSlot)
-    .filter((doctor) => matchesKeyword([
-      doctor.name,
-      doctor.title,
-      doctor.specialty,
-      doctor.workTimeSlot,
-      getHospitalName(doctor.hospitalId),
-      getRoomName(doctor.roomId),
-      doctor.shortIntro,
-      doctor.detailIntro,
-    ])),
-);
+const visibleHospitals = computed(() => adminHospitals.value.filter(Boolean));
+const visibleRooms = computed(() => adminRooms.value.filter(Boolean));
+const visibleDoctors = computed(() => adminDoctors.value.filter(Boolean));
 const visibleAppointments = computed(() => appointments.value.filter(Boolean));
 const homeAppointments = computed(() =>
   [...userAppointments.value]
@@ -417,6 +469,21 @@ const currentVisibleItems = computed(() => {
   }
 
   return visibleAppointments.value;
+});
+const currentAdminPagination = computed(() => {
+  if (activeModule.value === "hospital") {
+    return adminPagination.hospital;
+  }
+
+  if (activeModule.value === "room") {
+    return adminPagination.room;
+  }
+
+  if (activeModule.value === "doctor") {
+    return adminPagination.doctor;
+  }
+
+  return null;
 });
 
 const isAllSelected = computed(
@@ -729,6 +796,7 @@ async function submitAuth() {
 
     currentUser.value = auth;
     storeAuth(auth);
+    clearConsultSessionLocally();
     applyLoggedInUserToAppointment();
     authForm.password = "";
     authForm.name = "";
@@ -752,6 +820,7 @@ async function logoutCurrentUser() {
 
   clearStoredAuth();
   currentUser.value = null;
+  clearConsultSessionLocally();
   userAppointments.value = [];
   appointments.value = [];
   currentView.value = "home";
@@ -766,6 +835,47 @@ function switchAuthMode(mode) {
     authForm.phone = "";
     authForm.name = "";
   }
+}
+
+function resetToLoginOnSessionExpired(message = "登录状态已过期，请重新登录") {
+  clearStoredAuth();
+  currentUser.value = null;
+  userAppointments.value = [];
+  appointments.value = [];
+  consultResult.value = null;
+  consultRecommendations.value = [];
+  consultRecommendationCollapseNames.value = [];
+  consultMessages.value = [];
+  activeConsultSymptom.value = "";
+  consultConversationId.value = "";
+  activeConsultAssistantMessageId.value = "";
+  authMode.value = AUTH_MODE_LOGIN;
+  authForm.password = "";
+  currentView.value = "home";
+  pushRouteState();
+  ElMessage.warning(message);
+}
+
+function ensureLoggedIn(message = "请先登录") {
+  if (isLoggedIn.value) {
+    return true;
+  }
+
+  currentView.value = "home";
+  pushRouteState();
+  ElMessage.warning(message);
+  return false;
+}
+
+function ensureAdminLoggedIn(message = "只有管理员可以访问后台管理") {
+  if (isAdminUser.value) {
+    return true;
+  }
+
+  currentView.value = "home";
+  pushRouteState();
+  ElMessage.warning(message);
+  return false;
 }
 
 function applyLoggedInUserToAppointment() {
@@ -828,7 +938,15 @@ function pushRouteState() {
 
 async function applyRouteState({ view, module }) {
   isApplyingBrowserRoute = true;
-  currentView.value = view === "admin" && !isAdminUser.value ? "home" : view || "home";
+  currentView.value =
+    (
+      (view === "admin" && !isAdminUser.value) ||
+      (view === "appointment" && !isLoggedIn.value) ||
+      (view === "consult" && !isLoggedIn.value) ||
+      (view === "rag" && !isLoggedIn.value)
+    )
+      ? "home"
+      : view || "home";
 
   if (module && validModules.includes(module)) {
     activeModule.value = module;
@@ -840,24 +958,57 @@ async function applyRouteState({ view, module }) {
     await loadAdminCatalog();
   } else if (currentView.value === "appointment") {
     await loadAppointmentResources();
+  } else if (currentView.value === "consult") {
+    await loadConsultSessionState();
+  } else if (currentView.value === "rag") {
+    await loadRagDashboard();
+  }
+}
+
+async function loadRagDashboard() {
+  if (!ensureLoggedIn("请先登录后再查看知识库")) {
+    return;
+  }
+
+  isLoadingRag.value = true;
+
+  try {
+    const [stats, docs] = await Promise.all([
+      getRagStats(),
+      listRagDocuments(ragDocumentLimit.value),
+    ]);
+
+    ragStats.value = stats;
+    ragDocuments.value = (docs.ids || []).map((id, index) => ({
+      id,
+      text: docs.documents?.[index] || "",
+      metadata: docs.metadatas?.[index] || {},
+    }));
+  } catch (error) {
+    ElMessage.error(error.message || "知识库数据加载失败");
+  } finally {
+    isLoadingRag.value = false;
   }
 }
 
 async function loadAdminCatalog() {
+  if (!ensureAdminLoggedIn("只有管理员可以访问后台管理")) {
+    return;
+  }
+
   isLoadingCatalog.value = true;
 
   try {
-    const [hospitalItems, roomItems, doctorItems, appointmentItems] = await Promise.all([
+    const [hospitalItems, roomItems, appointmentItems] = await Promise.all([
       listHospitals(),
       listRooms(),
-      listDoctors(),
       listAdminAppointments(),
     ]);
 
     hospitals.value = hospitalItems;
     rooms.value = roomItems;
-    doctors.value = doctorItems;
     appointments.value = appointmentItems;
+    await loadAdminModulePage();
     pruneSelections();
   } catch (error) {
     ElMessage.error(error.message || "后台数据加载失败");
@@ -868,13 +1019,13 @@ async function loadAdminCatalog() {
 
 function pruneSelections() {
   selectedHospitalIds.value = selectedHospitalIds.value.filter((id) =>
-    hospitals.value.some((hospital) => hospital.id === id),
+    adminHospitals.value.some((hospital) => hospital.id === id),
   );
   selectedRoomIds.value = selectedRoomIds.value.filter((id) =>
-    rooms.value.some((room) => room.id === id),
+    adminRooms.value.some((room) => room.id === id),
   );
   selectedDoctorIds.value = selectedDoctorIds.value.filter((id) =>
-    doctors.value.some((doctor) => doctor.id === id),
+    adminDoctors.value.some((doctor) => doctor.id === id),
   );
   selectedAppointmentIds.value = selectedAppointmentIds.value.filter((id) =>
     appointments.value.some((appointment) => appointment.id === id),
@@ -1116,8 +1267,7 @@ function ensureAppointmentSelectionConsistency() {
 }
 
 async function goToAdmin() {
-  if (!isAdminUser.value) {
-    ElMessage.warning("只有管理员可以访问后台管理");
+  if (!ensureAdminLoggedIn("只有管理员可以访问后台管理")) {
     return;
   }
 
@@ -1127,8 +1277,7 @@ async function goToAdmin() {
 }
 
 async function goToAppointment() {
-  if (!isLoggedIn.value) {
-    ElMessage.warning("请先登录后再预约");
+  if (!ensureLoggedIn("请先登录后再预约")) {
     return;
   }
 
@@ -1137,14 +1286,24 @@ async function goToAppointment() {
   await loadAppointmentResources();
 }
 
-function goToConsult() {
-  if (!isLoggedIn.value) {
-    ElMessage.warning("请先登录后再使用 AI 问诊");
+async function goToConsult() {
+  if (!ensureLoggedIn("请先登录后再使用 AI 问诊")) {
     return;
   }
 
   currentView.value = "consult";
   pushRouteState();
+  await loadConsultSessionState();
+}
+
+async function goToRag() {
+  if (!ensureLoggedIn("请先登录后再查看知识库")) {
+    return;
+  }
+
+  currentView.value = "rag";
+  pushRouteState();
+  await loadRagDashboard();
 }
 
 function goHome() {
@@ -1156,10 +1315,42 @@ function goHome() {
   }
 }
 
+async function refreshRagDocuments() {
+  await loadRagDashboard();
+}
+
+async function submitRagSearch() {
+  if (!ragSearchForm.query.trim()) {
+    ElMessage.warning("请输入检索关键词");
+    return;
+  }
+
+  isSearchingRag.value = true;
+  try {
+    const result = await searchRagDocuments({
+      query: ragSearchForm.query.trim(),
+      top_k: Number(ragSearchForm.topK) || 5,
+    });
+    ragSearchResults.value = result.results || [];
+  } catch (error) {
+    ElMessage.error(error.message || "知识库检索失败");
+  } finally {
+    isSearchingRag.value = false;
+  }
+}
+
+function formatMetadata(metadata) {
+  return JSON.stringify(metadata || {}, null, 2);
+}
+
 function switchModule(moduleKey) {
   activeModule.value = moduleKey;
   resetFilters();
+  resetAdminPagination(moduleKey);
   pushRouteState();
+  if (currentView.value === "admin") {
+    loadAdminCatalog();
+  }
 }
 
 function isSelected(type, id) {
@@ -1200,6 +1391,13 @@ function resetFilters() {
   filters.workTimeSlot = "";
 }
 
+function resetAdminPagination(moduleKey = activeModule.value) {
+  const target = adminPagination[moduleKey];
+  if (target) {
+    target.page = 1;
+  }
+}
+
 function syncFilterRooms() {
   const roomStillVisible = rooms.value.some(
     (room) =>
@@ -1210,6 +1408,63 @@ function syncFilterRooms() {
   if (!roomStillVisible) {
     filters.roomId = "";
   }
+}
+
+async function loadAdminModulePage() {
+  if (activeModule.value === "hospital") {
+    const result = await listAdminHospitals({
+      page: adminPagination.hospital.page - 1,
+      size: adminPagination.hospital.size,
+      keyword: filters.keyword.trim(),
+    });
+    adminHospitals.value = result.items || [];
+    adminPagination.hospital.total = result.totalElements || 0;
+    return;
+  }
+
+  if (activeModule.value === "room") {
+    const result = await listAdminRooms({
+      page: adminPagination.room.page - 1,
+      size: adminPagination.room.size,
+      keyword: filters.keyword.trim(),
+      hospitalId: filters.hospitalId || undefined,
+    });
+    adminRooms.value = result.items || [];
+    adminPagination.room.total = result.totalElements || 0;
+    return;
+  }
+
+  if (activeModule.value === "doctor") {
+    const result = await listAdminDoctors({
+      page: adminPagination.doctor.page - 1,
+      size: adminPagination.doctor.size,
+      keyword: filters.keyword.trim(),
+      hospitalId: filters.hospitalId || undefined,
+      roomId: filters.roomId || undefined,
+      workTimeSlot: filters.workTimeSlot || undefined,
+    });
+    adminDoctors.value = result.items || [];
+    adminPagination.doctor.total = result.totalElements || 0;
+  }
+}
+
+async function handleAdminPageChange(page) {
+  const target = currentAdminPagination.value;
+  if (!target) {
+    return;
+  }
+  target.page = page;
+  await loadAdminCatalog();
+}
+
+async function handleAdminPageSizeChange(size) {
+  const target = currentAdminPagination.value;
+  if (!target) {
+    return;
+  }
+  target.size = size;
+  target.page = 1;
+  await loadAdminCatalog();
 }
 
 function getSelectionRef(type) {
@@ -1229,6 +1484,10 @@ function getSelectionRef(type) {
 }
 
 async function loadAppointmentResources() {
+  if (!ensureLoggedIn("请先登录后再预约")) {
+    return;
+  }
+
   isLoadingCatalog.value = true;
 
   try {
@@ -1468,6 +1727,10 @@ async function loadAppointmentQuota() {
 }
 
 async function submitAppointment() {
+  if (!ensureLoggedIn("请先登录后再预约")) {
+    return;
+  }
+
   applyLoggedInUserToAppointment();
 
   if (
@@ -1522,41 +1785,455 @@ async function submitAppointment() {
 }
 
 async function submitConsult() {
+  if (isConsulting.value) {
+    return;
+  }
+
+  if (!ensureLoggedIn("请先登录后再使用 AI 问诊")) {
+    return;
+  }
+
   if (!consultForm.symptom.trim()) {
     ElMessage.warning("请先描述你的症状或就诊诉求");
     return;
   }
 
   isConsulting.value = true;
+  const previousConsultResult = consultResult.value;
+  const previousConsultRecommendations = [...consultRecommendations.value];
+  const previousConsultRecommendationRequested = consultRecommendationRequested.value;
 
   try {
     const symptom = consultForm.symptom.trim();
-    const [result] = await Promise.all([
-      consultSymptom({ symptom }),
-      loadAppointmentResources(),
-    ]);
-    consultResult.value = result;
-    consultRecommendations.value = buildConsultRecommendations(result, symptom);
+    activeConsultSymptom.value = symptom;
+    consultForm.symptom = "";
+    consultRecommendationRequested.value = false;
+    consultRecommendationCollapseNames.value = [];
+    consultRecommendations.value = [];
+    consultResult.value = {
+      symptom,
+      recommendationQueryText: symptom,
+      patientSummary: "正在整理你刚才描述的情况，请稍等。",
+      inputCategory: "medical",
+      departmentRecommendation: "问诊分析中",
+      doctorRecommendation: [],
+      reason: "正在结合你的描述和知识库内容生成问诊建议，请稍等。",
+      generatedAnswer: "",
+      followUpQuestions: [],
+      urgency: "",
+      showDoctorRecommendationAction: false,
+      doctorRecommendationButtonText: "推荐医生",
+      doctorRecommendationPrompt: "",
+      answerMode: "streaming",
+      disclaimer: "AI 推荐仅供辅助参考，不能替代医生诊断。",
+      knowledgeReferences: [],
+    };
+    appendConsultUserMessage(symptom);
+    activeConsultAssistantMessageId.value = appendConsultAssistantMessage(consultResult.value);
+
+    await consultSymptomStream(
+      {
+        symptom,
+        conversationId: consultConversationId.value || undefined,
+      },
+      {
+        meta(payload) {
+          if (payload?.conversationId) {
+            consultConversationId.value = payload.conversationId;
+          }
+          consultResult.value = {
+            ...consultResult.value,
+            ...payload,
+          };
+          syncActiveConsultAssistantMessage(consultResult.value);
+        },
+        delta(payload) {
+          if (!consultResult.value) {
+            return;
+          }
+
+          consultResult.value = {
+            ...consultResult.value,
+            generatedAnswer: `${consultResult.value.generatedAnswer || ""}${payload?.text || ""}`,
+          };
+          syncActiveConsultAssistantMessage(consultResult.value);
+        },
+        complete(payload) {
+          if (payload?.conversationId) {
+            consultConversationId.value = payload.conversationId;
+          }
+          consultResult.value = payload;
+          syncActiveConsultAssistantMessage(consultResult.value);
+        },
+      },
+    );
+
     ElMessage.success("问诊分析已生成");
   } catch (error) {
+    consultResult.value = previousConsultResult;
+    consultRecommendations.value = previousConsultRecommendations;
+    consultRecommendationRequested.value = previousConsultRecommendationRequested;
+    markActiveConsultAssistantMessageAsError(error.message || "AI 问诊失败，请稍后重试。");
     ElMessage.error(error.message || "AI 问诊失败");
   } finally {
+    activeConsultAssistantMessageId.value = "";
     isConsulting.value = false;
   }
 }
 
-function buildConsultRecommendations(result, symptom) {
+function buildConsultAssistantMessageText(result) {
+  if (!result) {
+    return "正在结合你的描述生成问诊建议，请稍等。";
+  }
+
+  const parts = [];
+  const summary = String(result.patientSummary || "").trim();
+  const department = String(result.departmentRecommendation || "").trim();
+  const urgencyLabel = getConsultUrgencyLabel(result.urgency);
+  const reason = String(result.reason || "").trim();
+  const generatedAnswer = String(result.generatedAnswer || "").trim();
+  const followUpQuestions = getConsultFollowUpQuestions(result);
+
+  if (summary && !summary.includes("正在整理")) {
+    parts.push(`情况总结：${summary}`);
+  }
+
+  if (department) {
+    parts.push(`推荐科室：${department}${urgencyLabel ? ` · ${urgencyLabel}` : ""}`);
+  }
+
+  if (reason) {
+    parts.push(reason);
+  }
+
+  if (generatedAnswer && generatedAnswer !== reason) {
+    parts.push(generatedAnswer);
+  }
+
+  if (followUpQuestions.length) {
+    parts.push(`建议继续补充：\n${followUpQuestions.map((question) => `- ${question}`).join("\n")}`);
+  }
+
+  if (!parts.length) {
+    return "正在结合你的描述生成问诊建议，请稍等。";
+  }
+
+  return parts.join("\n\n");
+}
+
+function createConsultMessage(role, text, state = "done") {
+  consultMessageSequence += 1;
+  return {
+    id: `consult-${consultMessageSequence}`,
+    role,
+    text,
+    state,
+  };
+}
+
+function scrollConsultChatToBottom() {
+  void nextTick(() => {
+    const viewport = consultChatViewport.value;
+    if (viewport) {
+      viewport.scrollTop = viewport.scrollHeight;
+    }
+  });
+}
+
+function appendConsultUserMessage(text) {
+  consultMessages.value = [
+    ...consultMessages.value,
+    createConsultMessage("user", String(text || "").trim()),
+  ];
+  scrollConsultChatToBottom();
+}
+
+function hydrateConsultMessagesFromHistory(history) {
+  consultMessages.value = [];
+  consultMessageSequence = 0;
+  if (!Array.isArray(history)) {
+    return;
+  }
+
+  const restoredMessages = history
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+      const role = item.role === "assistant" ? "assistant" : item.role === "user" ? "user" : "";
+      const text = String(item.content || "").trim();
+      if (!role || !text) {
+        return null;
+      }
+      return createConsultMessage(role, text, "done");
+    })
+    .filter(Boolean);
+
+  consultMessages.value = restoredMessages;
+  activeConsultSymptom.value = [...restoredMessages].reverse().find((item) => item.role === "user")?.text || "";
+  scrollConsultChatToBottom();
+}
+
+function appendConsultAssistantMessage(result) {
+  const message = createConsultMessage("assistant", buildConsultAssistantMessageText(result), "streaming");
+  consultMessages.value = [...consultMessages.value, message];
+  scrollConsultChatToBottom();
+  return message.id;
+}
+
+function updateConsultMessage(messageId, updater) {
+  consultMessages.value = consultMessages.value.map((message) => {
+    if (message.id !== messageId) {
+      return message;
+    }
+    return updater(message);
+  });
+  scrollConsultChatToBottom();
+}
+
+function syncActiveConsultAssistantMessage(result) {
+  if (!activeConsultAssistantMessageId.value) {
+    return;
+  }
+
+  updateConsultMessage(activeConsultAssistantMessageId.value, (message) => ({
+    ...message,
+    text: buildConsultAssistantMessageText(result),
+    state: result?.answerMode === "streaming" ? "streaming" : "done",
+  }));
+}
+
+function markActiveConsultAssistantMessageAsError(text) {
+  if (!activeConsultAssistantMessageId.value) {
+    return;
+  }
+
+  updateConsultMessage(activeConsultAssistantMessageId.value, (message) => ({
+    ...message,
+    text: String(text || "AI 问诊失败，请稍后重试。"),
+    state: "error",
+  }));
+}
+
+async function loadConsultSessionState() {
+  if (!isLoggedIn.value) {
+    return;
+  }
+
+  try {
+    const session = await getConsultSession();
+    consultConversationId.value = String(session?.conversationId || "").trim();
+    hydrateConsultMessagesFromHistory(session?.history || []);
+    consultResult.value = null;
+    consultRecommendations.value = [];
+    consultRecommendationCollapseNames.value = [];
+    consultRecommendationRequested.value = false;
+  } catch (error) {
+    ElMessage.error(error.message || "问诊会话恢复失败");
+  }
+}
+
+function getConsultRecommendationQueryText(result) {
+  return String(result?.recommendationQueryText || activeConsultSymptom.value || "").trim();
+}
+
+function extractConsultQueryTokens(queryText) {
+  const normalized = normalizeText(queryText);
+  const keywordCandidates = [
+    "发热", "发烧", "高热", "高烧", "咳嗽", "咳痰", "喘", "气短", "呼吸困难",
+    "胸闷", "胸痛", "心悸", "高血压", "胃痛", "反酸", "腹痛", "腹泻", "便秘",
+    "牙痛", "牙龈", "口腔", "失眠", "乏力", "儿童", "孩子", "宝宝", "孕", "产检",
+    "胎动", "颈", "肩", "腰", "腿痛", "康复", "针灸",
+  ];
+  const tokens = new Set(
+    queryText
+      .split(/[，。,.、；;：:\s]+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2),
+  );
+
+  for (const keyword of keywordCandidates) {
+    if (normalized.includes(keyword)) {
+      tokens.add(keyword);
+    }
+  }
+
+  return [...tokens];
+}
+
+function extractConsultLocationHints(queryText) {
+  const normalized = normalizeText(queryText);
+  const hints = [];
+
+  for (const [region, cities] of Object.entries(CONSULT_REGION_CITY_ALIASES)) {
+    if (!normalized.includes(normalizeText(region))) {
+      continue;
+    }
+    for (const city of cities) {
+      if (!hints.includes(city)) {
+        hints.push(city);
+      }
+    }
+  }
+
+  for (const city of CONSULT_DIRECT_CITY_HINTS) {
+    if (normalized.includes(normalizeText(city)) && !hints.includes(city)) {
+      hints.push(city);
+    }
+  }
+
+  return hints;
+}
+
+function hospitalMatchesConsultLocationHints(hospital, locationHints) {
+  if (!locationHints.length) {
+    return true;
+  }
+
+  const searchableText = normalizeText([
+    hospital?.name,
+    hospital?.location,
+    hospital?.shortIntro,
+    hospital?.detailIntro,
+  ].join(" "));
+
+  return locationHints.some((hint) => searchableText.includes(normalizeText(hint)));
+}
+
+function canBuildConsultRecommendationCandidates(result) {
+  const queryText = getConsultRecommendationQueryText(result);
+  const normalizedDepartment = normalizeText(result?.departmentRecommendation);
+
+  if (!queryText) {
+    return false;
+  }
+
+  if (result?.inputCategory !== "medical") {
+    return false;
+  }
+
+  if (result?.urgency === "emergency") {
+    return false;
+  }
+
+  if (!normalizedDepartment) {
+    return false;
+  }
+
+  return true;
+}
+
+function normalizeConsultRecommendationItem(item) {
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+
+  const hospital = item.hospital && typeof item.hospital === "object"
+    ? {
+        id: Number(item.hospital.id),
+        name: String(item.hospital.name || "").trim(),
+        level: String(item.hospital.level || "").trim(),
+        location: String(item.hospital.location || "").trim(),
+        shortIntro: String(item.hospital.shortIntro || "").trim(),
+        detailIntro: String(item.hospital.detailIntro || "").trim(),
+      }
+    : null;
+  const room = item.room && typeof item.room === "object"
+    ? {
+        id: Number(item.room.id),
+        hospitalId: Number(item.room.hospitalId),
+        hospitalName: String(item.room.hospitalName || "").trim(),
+        name: String(item.room.name || "").trim(),
+        floor: String(item.room.floor || "").trim(),
+        shortIntro: String(item.room.shortIntro || "").trim(),
+        detailIntro: String(item.room.detailIntro || "").trim(),
+      }
+    : null;
+  const doctor = item.doctor && typeof item.doctor === "object"
+    ? {
+        id: Number(item.doctor.id),
+        hospitalId: Number(item.doctor.hospitalId),
+        hospitalName: String(item.doctor.hospitalName || "").trim(),
+        roomId: Number(item.doctor.roomId),
+        roomName: String(item.doctor.roomName || "").trim(),
+        name: String(item.doctor.name || "").trim(),
+        title: String(item.doctor.title || "").trim(),
+        specialty: String(item.doctor.specialty || "").trim(),
+        workTimeSlot: String(item.doctor.workTimeSlot || "").trim(),
+        shortIntro: String(item.doctor.shortIntro || "").trim(),
+        detailIntro: String(item.doctor.detailIntro || "").trim(),
+      }
+    : null;
+  const quota = item.quota && typeof item.quota === "object"
+    ? {
+        doctorId: Number(item.quota.doctorId),
+        appointmentDate: String(item.quota.appointmentDate || "").trim(),
+        timeSlot: String(item.quota.timeSlot || "").trim(),
+        reservedCount: Number(item.quota.reservedCount || 0),
+        remainingCount: Number(item.quota.remainingCount || 0),
+        capacity: Number(item.quota.capacity || 0),
+      }
+    : null;
+
+  if (!hospital?.id || !room?.id || !doctor?.id) {
+    return null;
+  }
+
+  return {
+    score: Number(item.score || 0),
+    matchReason: String(item.matchReason || "").trim(),
+    hospital,
+    room,
+    doctor,
+    quota,
+  };
+}
+
+function getConsultServiceRecommendations(result, limit = 5) {
+  const serviceRecommendations = Array.isArray(result?.doctorRecommendation)
+    ? result.doctorRecommendation
+      .map((item) => normalizeConsultRecommendationItem(item))
+      .filter(Boolean)
+    : [];
+
+  return serviceRecommendations.slice(0, limit);
+}
+
+function getConsultResultRecommendations(result, limit = 5, includeLocalFallback = false) {
+  const serviceRecommendations = getConsultServiceRecommendations(result, limit);
+  if (serviceRecommendations.length || !includeLocalFallback) {
+    return serviceRecommendations;
+  }
+
+  return buildConsultRecommendationCandidates(result, limit);
+}
+
+function getConsultPrimaryRecommendationOptions(result) {
+  return getConsultResultRecommendations(result, 5);
+}
+
+function getConsultPrimaryRecommendation(result) {
+  return getConsultPrimaryRecommendationOptions(result)[0] || null;
+}
+
+function buildConsultRecommendationCandidates(result, limit = 5) {
+  if (!canBuildConsultRecommendationCandidates(result)) {
+    return [];
+  }
+
   const department = normalizeText(result?.departmentRecommendation);
-  const symptomText = normalizeText(symptom);
-  const symptomTokens = symptomText
-    .split(/[，。,.、\s]+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2);
+  const queryText = getConsultRecommendationQueryText(result);
+  const symptomText = normalizeText(queryText);
+  const symptomTokens = extractConsultQueryTokens(queryText);
+  const locationHints = extractConsultLocationHints(queryText);
 
   return doctors.value
     .map((doctor) => {
       const room = rooms.value.find((item) => item.id === doctor.roomId);
       const hospital = hospitals.value.find((item) => item.id === doctor.hospitalId);
+      if (!hospitalMatchesConsultLocationHints(hospital, locationHints)) {
+        return null;
+      }
       const searchableText = normalizeText([
         hospital?.name,
         hospital?.level,
@@ -1583,12 +2260,24 @@ function buildConsultRecommendations(result, symptom) {
 
       for (const token of symptomTokens) {
         if (searchableText.includes(token)) {
-          score += 2;
+          score += token.length >= 3 ? 3 : 2;
         }
       }
 
-      if (score === 0 && department.includes("全科")) {
-        score = 1;
+      if (department.includes("全科") && room) {
+        const roomText = normalizeText(`${room.name} ${room.shortIntro || ""} ${room.detailIntro || ""}`);
+        if (
+          (symptomText.includes("发热") || symptomText.includes("发烧") || symptomText.includes("咳嗽"))
+          && roomText.includes("呼吸")
+        ) {
+          score += 6;
+        }
+        if ((symptomText.includes("腹痛") || symptomText.includes("反酸") || symptomText.includes("腹泻")) && roomText.includes("消化")) {
+          score += 6;
+        }
+        if ((symptomText.includes("胸闷") || symptomText.includes("胸痛") || symptomText.includes("心悸")) && roomText.includes("心内")) {
+          score += 6;
+        }
       }
 
       return {
@@ -1598,30 +2287,206 @@ function buildConsultRecommendations(result, symptom) {
         doctor,
       };
     })
+    .filter(Boolean)
     .filter((item) => item.score > 0 && item.hospital && item.room)
     .sort((left, right) => right.score - left.score || left.doctor.id - right.doctor.id)
-    .slice(0, 6);
+    .slice(0, limit);
+}
+
+function hasDoctorRecommendationIntent(symptomText) {
+  return /(推荐.*医生|医生.*推荐|帮.*推荐.*医生|推荐.*可预约|可预约.*医生|挂哪个医生|适合.*医生|帮我找.*医生|帮我选.*医生)/.test(symptomText);
+}
+
+function getConsultPatientSummary(result, symptom) {
+  const summary = String(result?.patientSummary ?? "").trim();
+  if (summary) {
+    return summary;
+  }
+
+  const symptomText = String(symptom ?? "").trim();
+  return symptomText ? `你提到的主要情况是：${symptomText}` : "请先描述你的主要症状。";
+}
+
+function getConsultRecommendationSummary(result, primaryRecommendation) {
+  if (result?.inputCategory !== "medical") {
+    return "请先补充主要症状、持续时间和是否加重，我再为你推荐合适的医院、诊室和医生。";
+  }
+
+  if (result?.urgency === "emergency") {
+    return "当前描述提示存在急症风险，建议优先前往最近的综合医院急诊，不建议先在线筛选门诊医生。";
+  }
+
+  if (primaryRecommendation) {
+    return `结合当前描述，优先考虑 ${primaryRecommendation.hospital.name} 的 ${primaryRecommendation.room.name}，可先关注 ${primaryRecommendation.doctor.name} 医生。`;
+  }
+
+  return `目前建议先按 ${result?.departmentRecommendation || "推荐科室"} 挂号，补充更多细节后我再帮你进一步缩小到具体医院和医生。`;
+}
+
+function canShowDoctorRecommendationAction(result) {
+  return Boolean(
+    result?.showDoctorRecommendationAction &&
+    result?.answerMode !== "streaming",
+  );
+}
+
+async function requestConsultDoctorRecommendations() {
+  if (!consultResult.value) {
+    return;
+  }
+
+  if (!ensureLoggedIn("请先登录后再使用推荐医生功能")) {
+    return;
+  }
+
+  consultRecommendationRequested.value = true;
+  consultRecommendationCollapseNames.value = [];
+  consultRecommendations.value = getConsultServiceRecommendations(consultResult.value, 5);
+
+  if (!consultRecommendations.value.length && (!hospitals.value.length || !rooms.value.length || !doctors.value.length)) {
+    await loadAppointmentResources();
+  }
+
+  if (!consultRecommendations.value.length) {
+    consultRecommendations.value = getConsultResultRecommendations(consultResult.value, 5, true);
+  }
+
+  if (!consultRecommendations.value.length) {
+    ElMessage.info("暂未匹配到更合适的可预约医生，请先按推荐科室挂号。");
+  }
+}
+
+function getConsultFollowUpQuestions(result) {
+  if (!Array.isArray(result?.followUpQuestions)) {
+    return [];
+  }
+
+  return result.followUpQuestions
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+function getConsultUrgencyLabel(urgency) {
+  if (urgency === "emergency") {
+    return "建议立即急诊";
+  }
+
+  if (urgency === "soon") {
+    return "建议尽快就诊";
+  }
+
+  if (urgency === "normal") {
+    return "可预约门诊";
+  }
+
+  return "";
+}
+
+function getConsultModeNote(result) {
+  if (result?.answerMode === "streaming") {
+    return "正在结合知识库和大模型流式生成问诊建议。";
+  }
+
+  if (result?.answerMode === "langchain" || result?.answerMode === "llm") {
+    return "本次结果已结合知识库内容，由 LangChain 编排大模型生成问诊建议。";
+  }
+
+  return "当前未配置可用大模型，已使用知识库和规则做本地兜底回答。";
+}
+
+function getConsultRecommendationEmptyText(result, symptom) {
+  if (result?.answerMode === "streaming" || !consultRecommendationRequested.value) {
+    return "";
+  }
+
+  if (result?.urgency === "emergency") {
+    return "当前更建议尽快线下就医，不建议继续在线筛选预约医生。";
+  }
+
+  return "暂未匹配到具体医生，可先按推荐科室进行挂号。";
+}
+
+function clearConsultState() {
+  consultForm.symptom = "";
+}
+
+function clearConsultSessionLocally() {
+  consultForm.symptom = "";
+  consultResult.value = null;
+  consultRecommendations.value = [];
+  consultRecommendationCollapseNames.value = [];
+  consultMessages.value = [];
+  consultRecommendationRequested.value = false;
+  activeConsultSymptom.value = "";
+  consultConversationId.value = "";
+  activeConsultAssistantMessageId.value = "";
+}
+
+async function resetConsultConversation() {
+  if (isConsulting.value) {
+    ElMessage.warning("当前问诊仍在生成中，请稍后再重置会话");
+    return;
+  }
+
+  const hasConversation = Boolean(consultConversationId.value);
+  const hasVisibleState = Boolean(consultResult.value || activeConsultSymptom.value || consultForm.symptom.trim());
+  if (!hasConversation && !hasVisibleState) {
+    ElMessage.info("当前没有需要重置的问诊会话");
+    return;
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      "重置后将清空当前问诊结果，并从 Redis 中物理删除这段会话记录。",
+      "重置会话",
+      {
+        type: "warning",
+        confirmButtonText: "确认重置",
+        cancelButtonText: "取消",
+      },
+    );
+  } catch {
+    return;
+  }
+
+  try {
+    if (consultConversationId.value) {
+      await deleteConsultConversation(consultConversationId.value);
+    }
+    clearConsultSessionLocally();
+    ElMessage.success("问诊会话已重置");
+  } catch (error) {
+    ElMessage.error(error.message || "重置会话失败");
+  }
 }
 
 async function useConsultRecommendation(item) {
+  if (!ensureLoggedIn("请先登录后再预约")) {
+    return;
+  }
+
+  const recommendedAppointmentDate = item.quota?.appointmentDate || "";
+  const recommendedTimeSlot = item.quota?.timeSlot || item.doctor.workTimeSlot || "上午 08:30-10:30";
   Object.assign(appointmentForm, {
     hospitalId: item.hospital.id,
     roomId: item.room.id,
     doctorId: item.doctor.id,
     patientName: "",
     patientPhone: "",
-    appointmentDate: "",
-    timeSlot: item.doctor.workTimeSlot || "上午 08:30-10:30",
-    symptom: consultForm.symptom.trim(),
+    appointmentDate: recommendedAppointmentDate,
+    timeSlot: recommendedTimeSlot,
+    symptom: activeConsultSymptom.value,
   });
   currentView.value = "appointment";
   pushRouteState();
   await loadAppointmentResources();
   appointmentForm.hospitalId = item.hospital.id;
   appointmentForm.roomId = item.room.id;
-  appointmentForm.timeSlot = item.doctor.workTimeSlot || appointmentForm.timeSlot;
+  appointmentForm.appointmentDate = recommendedAppointmentDate || appointmentForm.appointmentDate;
+  appointmentForm.timeSlot = recommendedTimeSlot || appointmentForm.timeSlot;
   appointmentForm.doctorId = item.doctor.id;
-  appointmentForm.symptom = consultForm.symptom.trim();
+  appointmentForm.symptom = activeConsultSymptom.value;
   browsedHospitalId.value = item.hospital.id;
   browsedRoomId.value = item.room.id;
   applyLoggedInUserToAppointment();
@@ -1771,8 +2636,8 @@ async function confirmDanger(message, title) {
 }
 
 async function removeHospital(item) {
-  const roomCount = item.roomCount ?? rooms.value.filter((room) => room?.hospitalId === item.id).length;
-  const doctorCount = item.doctorCount ?? doctors.value.filter((doctor) => doctor?.hospitalId === item.id).length;
+  const roomCount = item.roomCount ?? 0;
+  const doctorCount = item.doctorCount ?? 0;
 
   const confirmed = await confirmDanger(
     `删除后将一并移除 ${roomCount} 个诊室和 ${doctorCount} 位医生，确认继续吗？`,
@@ -1787,7 +2652,7 @@ async function removeHospital(item) {
 }
 
 async function removeRoom(item) {
-  const doctorCount = item.doctorCount ?? doctors.value.filter((doctor) => doctor?.roomId === item.id).length;
+  const doctorCount = item.doctorCount ?? 0;
 
   const confirmed = await confirmDanger(
     `删除后将一并移除 ${doctorCount} 位医生，确认继续吗？`,
@@ -1821,8 +2686,8 @@ async function removeSelectedItems() {
 
   if (activeModule.value === "hospital") {
     const selectedHospitals = visibleHospitals.value.filter((item) => ids.includes(item.id));
-    const roomCount = rooms.value.filter((room) => ids.includes(room.hospitalId)).length;
-    const doctorCount = doctors.value.filter((doctor) => ids.includes(doctor.hospitalId)).length;
+    const roomCount = selectedHospitals.reduce((sum, item) => sum + (item.roomCount ?? 0), 0);
+    const doctorCount = selectedHospitals.reduce((sum, item) => sum + (item.doctorCount ?? 0), 0);
 
     const confirmed = await confirmDanger(
       `确认删除 ${selectedHospitals.length} 家医院吗？这会同时删除 ${roomCount} 个诊室和 ${doctorCount} 位医生。`,
@@ -1842,7 +2707,7 @@ async function removeSelectedItems() {
 
   if (activeModule.value === "room") {
     const selectedRooms = visibleRooms.value.filter((item) => ids.includes(item.id));
-    const doctorCount = doctors.value.filter((doctor) => ids.includes(doctor.roomId)).length;
+    const doctorCount = selectedRooms.reduce((sum, item) => sum + (item.doctorCount ?? 0), 0);
 
     const confirmed = await confirmDanger(
       `确认删除 ${selectedRooms.length} 个诊室吗？这会同时删除 ${doctorCount} 位医生。`,
@@ -1957,6 +2822,17 @@ watch(activeModule, (value) => {
   }
 });
 
+watch(
+  () => [filters.keyword, filters.hospitalId, filters.roomId, filters.workTimeSlot],
+  async () => {
+    if (currentView.value !== "admin" || activeModule.value === "appointment") {
+      return;
+    }
+    resetAdminPagination();
+    await loadAdminCatalog();
+  },
+);
+
 onMounted(() => {
   if (!isLoggedIn.value && currentView.value !== "home") {
     currentView.value = "home";
@@ -1977,6 +2853,11 @@ onMounted(() => {
 
     window.addEventListener("popstate", () => {
       applyRouteState(getRouteState());
+    });
+
+    window.addEventListener(AUTH_EXPIRED_EVENT, (event) => {
+      const message = event?.detail?.message || "登录状态已过期，请重新登录";
+      resetToLoginOnSessionExpired(message);
     });
   }
 
@@ -2101,6 +2982,9 @@ onMounted(() => {
           <el-button size="large" plain class="home-button" @click="goToAppointment">
             <span class="button-label">挂号预约</span>
           </el-button>
+          <el-button size="large" plain class="home-button" @click="goToRag">
+            <span class="button-label">RAG 知识库</span>
+          </el-button>
           <el-button v-if="isAdminUser" size="large" class="home-button admin-button" @click="goToAdmin">
             <span class="button-label">后台管理</span>
           </el-button>
@@ -2170,7 +3054,22 @@ onMounted(() => {
         </header>
 
         <div class="appointment-layout consult-layout">
-          <section class="appointment-panel consult-panel">
+          <section class="appointment-panel consult-panel consult-chat-panel">
+            <div ref="consultChatViewport" class="consult-chat-history">
+              <article
+                v-for="message in consultMessages"
+                :key="message.id"
+                class="consult-chat-message"
+                :data-role="message.role"
+                :data-state="message.state"
+              >
+                <p class="entity-tag">{{ message.role === "user" ? "你" : "AI 导诊" }}</p>
+                <p class="consult-chat-text">{{ message.text }}</p>
+              </article>
+              <div v-if="!consultMessages.length" class="consult-chat-empty">
+                这里会保留当前会话里的历史问答，你可以连续补充症状，系统会结合上下文继续分析。
+              </div>
+            </div>
             <el-form label-position="top" class="editor-form">
               <el-form-item label="症状描述">
                 <el-input
@@ -2179,24 +3078,13 @@ onMounted(() => {
                   :rows="8"
                   maxlength="800"
                   show-word-limit
-                  placeholder="例如：发热咳嗽三天，夜间咳嗽明显，有黄痰，伴轻微胸闷。"
+                  @keydown.enter.exact.prevent="submitConsult"
                 />
               </el-form-item>
 
-              <div class="symptom-examples">
-                <button type="button" @click="consultForm.symptom = '胸闷胸痛两天，活动后加重，偶尔心悸，既往有高血压。'">
-                  胸闷心悸
-                </button>
-                <button type="button" @click="consultForm.symptom = '孩子发热咳嗽一天，体温 38.5 度，流鼻涕，夜间咳嗽较重。'">
-                  儿童发热咳嗽
-                </button>
-                <button type="button" @click="consultForm.symptom = '反酸烧心一周，饭后腹胀，偶尔胃痛，想挂合适的科室。'">
-                  反酸胃痛
-                </button>
-              </div>
-
               <div class="appointment-actions">
-                <el-button plain @click="consultForm.symptom = ''; consultResult = null; consultRecommendations = []">清空</el-button>
+                <el-button plain @click="clearConsultState">清空</el-button>
+                <el-button plain type="danger" @click="resetConsultConversation">重置会话</el-button>
                 <el-button type="primary" :loading="isConsulting" @click="submitConsult">
                   开始问诊
                 </el-button>
@@ -2207,31 +3095,232 @@ onMounted(() => {
           <aside class="appointment-summary consult-result">
             <p class="entity-tag">问诊结果</p>
             <template v-if="consultResult">
-              <h3>{{ consultResult.departmentRecommendation }}</h3>
-              <div class="detail-line">{{ consultResult.reason }}</div>
-              <div v-if="consultRecommendations.length" class="consult-recommendations">
-                <article
-                  v-for="item in consultRecommendations"
-                  :key="item.doctor.id"
-                  class="consult-recommendation-card"
+              <div class="consult-result-header">
+                <div>
+                  <h3>{{ consultResult.departmentRecommendation }}</h3>
+                  <p class="consult-mode-note">{{ getConsultModeNote(consultResult) }}</p>
+                </div>
+                <span
+                  v-if="getConsultUrgencyLabel(consultResult.urgency)"
+                  class="consult-urgency-badge"
+                  :data-urgency="consultResult.urgency"
                 >
-                  <p class="entity-tag">{{ item.hospital.name }}</p>
-                  <h4>{{ item.room.name }} / {{ item.doctor.name }}</h4>
-                  <p>{{ item.doctor.title }} · {{ item.doctor.specialty }}</p>
-                  <p>上班时间：{{ item.doctor.workTimeSlot }}</p>
-                  <el-button type="primary" plain @click="useConsultRecommendation(item)">
-                    选择并预约
-                  </el-button>
-                </article>
+                  {{ getConsultUrgencyLabel(consultResult.urgency) }}
+                </span>
               </div>
-              <div v-else class="detail-line">暂未匹配到具体医生，可先按推荐科室进行挂号。</div>
+              <div class="consult-insight-card">
+                <section class="consult-section">
+                  <p class="entity-tag">1. 情况总结</p>
+                  <p class="consult-insight-lead">
+                    {{ getConsultPatientSummary(consultResult, activeConsultSymptom) }}
+                  </p>
+                </section>
+
+                <section class="consult-section">
+                  <p class="entity-tag">2. 初步推荐</p>
+                  <p class="consult-insight-lead">
+                    {{ getConsultRecommendationSummary(consultResult, getConsultPrimaryRecommendation(consultResult)) }}
+                  </p>
+                  <div v-if="getConsultPrimaryRecommendation(consultResult)" class="consult-primary-card">
+                    <p class="entity-tag">{{ getConsultPrimaryRecommendation(consultResult).hospital.name }}</p>
+                    <h4>
+                      {{ getConsultPrimaryRecommendation(consultResult).room.name }} / {{ getConsultPrimaryRecommendation(consultResult).doctor.name }}
+                    </h4>
+                    <p>{{ getConsultPrimaryRecommendation(consultResult).doctor.title }} · {{ getConsultPrimaryRecommendation(consultResult).doctor.specialty }}</p>
+                    <p>建议时段：{{ getConsultPrimaryRecommendation(consultResult).doctor.workTimeSlot }}</p>
+                  </div>
+                  <p class="consult-generated-answer">
+                    {{ consultResult.reason }}
+                  </p>
+                  <p v-if="consultResult.generatedAnswer" class="consult-generated-answer">
+                    {{ consultResult.generatedAnswer }}
+                  </p>
+                </section>
+
+                <section v-if="getConsultFollowUpQuestions(consultResult).length" class="consult-section consult-follow-up">
+                  <p class="entity-tag">3. 建议继续补充</p>
+                  <ul class="consult-follow-up-list">
+                    <li
+                      v-for="question in getConsultFollowUpQuestions(consultResult)"
+                      :key="question"
+                    >
+                      {{ question }}
+                    </li>
+                  </ul>
+                </section>
+              </div>
+              <div
+                v-if="canShowDoctorRecommendationAction(consultResult) && !consultRecommendationRequested"
+                class="consult-action-panel"
+              >
+                <p class="detail-line">
+                  {{ consultResult.doctorRecommendationPrompt || "如果需要，我可以继续为你推荐可预约医生。" }}
+                </p>
+                <el-button type="primary" @click="requestConsultDoctorRecommendations">
+                  {{ consultResult.doctorRecommendationButtonText || "推荐医生" }}
+                </el-button>
+              </div>
+              <el-collapse
+                v-if="consultRecommendations.length"
+                v-model="consultRecommendationCollapseNames"
+                class="consult-recommendation-collapse"
+              >
+                <el-collapse-item name="doctor-recommendations">
+                  <template #title>
+                    <div class="consult-recommendation-collapse-title">
+                      <div>
+                        <p class="consult-recommendation-collapse-heading">可预约医生</p>
+                        <p class="consult-recommendation-collapse-hint">
+                          点击展开查看 {{ consultRecommendations.length }} 位医生
+                        </p>
+                      </div>
+                      <span class="consult-recommendation-collapse-count">
+                        {{ consultRecommendations.length }} 位
+                      </span>
+                    </div>
+                  </template>
+                  <div class="consult-recommendations">
+                    <article
+                      v-for="item in consultRecommendations"
+                      :key="item.doctor.id"
+                      class="consult-recommendation-card"
+                    >
+                      <p class="entity-tag">{{ item.hospital.name }}</p>
+                      <h4>{{ item.room.name }} / {{ item.doctor.name }}</h4>
+                      <p>{{ item.doctor.title }} · {{ item.doctor.specialty }}</p>
+                      <p>上班时间：{{ item.doctor.workTimeSlot }}</p>
+                      <p v-if="item.quota?.appointmentDate">
+                        可预约：{{ item.quota.appointmentDate }} · {{ item.quota.timeSlot }} · 剩余 {{ item.quota.remainingCount }} 个号
+                      </p>
+                      <el-button type="primary" plain @click="useConsultRecommendation(item)">
+                        选择并预约
+                      </el-button>
+                    </article>
+                  </div>
+                </el-collapse-item>
+              </el-collapse>
+              <div v-else-if="getConsultRecommendationEmptyText(consultResult, activeConsultSymptom)" class="detail-line">
+                {{ getConsultRecommendationEmptyText(consultResult, activeConsultSymptom) }}
+              </div>
               <p class="consult-disclaimer">{{ consultResult.disclaimer }}</p>
             </template>
             <template v-else>
               <h3>等待输入症状</h3>
-              <p>提交后会在这里展示推荐科室、推荐理由和注意事项。</p>
+              <p>提交后会按“情况总结、初步推荐、继续追问”三部分展示结果。</p>
               <div class="detail-line">若出现剧烈胸痛、呼吸困难、意识异常等紧急情况，请优先急诊。</div>
             </template>
+          </aside>
+        </div>
+      </section>
+    </template>
+
+    <template v-else-if="currentView === 'rag'">
+      <section class="appointment-shell rag-shell" v-loading="isLoadingRag">
+        <header class="appointment-header">
+          <div>
+            <p class="module-eyebrow">RAG 调试</p>
+            <h2>Chroma 知识库查看器</h2>
+            <p class="module-copy">查看集合统计、已入库文档和实时 query 结果，方便你调试导诊知识命中情况。</p>
+          </div>
+          <div class="rag-header-actions">
+            <el-button plain @click="refreshRagDocuments">刷新数据</el-button>
+            <el-button plain @click="goHome">返回首页</el-button>
+          </div>
+        </header>
+
+        <div class="rag-overview-grid">
+          <article class="rag-stat-card">
+            <p class="entity-tag">Collection</p>
+            <h3>{{ ragStats?.collection || "ihrs_knowledge" }}</h3>
+            <p>{{ ragStats?.count ?? 0 }} 条知识</p>
+          </article>
+          <article class="rag-stat-card">
+            <p class="entity-tag">Persist Dir</p>
+            <h3>Chroma DB</h3>
+            <p>{{ ragStats?.persistDirectory || "/app/chroma_db" }}</p>
+          </article>
+          <article class="rag-stat-card">
+            <p class="entity-tag">Knowledge Dir</p>
+            <h3>Source Files</h3>
+            <p>{{ ragStats?.knowledgeDirectory || "/app/knowledge" }}</p>
+          </article>
+        </div>
+
+        <div class="appointment-layout rag-layout">
+          <section class="appointment-panel rag-panel">
+            <div class="rag-panel-header">
+              <div>
+                <p class="entity-tag">已入库文档</p>
+                <h3>前 {{ ragDocumentLimit }} 条知识内容</h3>
+              </div>
+            </div>
+
+            <div v-if="ragDocuments.length" class="rag-document-list">
+              <article
+                v-for="item in ragDocuments"
+                :key="item.id"
+                class="rag-document-card"
+              >
+                <div class="rag-document-top">
+                  <div>
+                    <p class="entity-tag">{{ item.metadata.type || "knowledge" }}</p>
+                    <h4>{{ item.id }}</h4>
+                  </div>
+                  <span class="detail-side">{{ item.metadata.department || "未分类" }}</span>
+                </div>
+                <p class="entity-intro">{{ item.text }}</p>
+                <pre class="rag-metadata">{{ formatMetadata(item.metadata) }}</pre>
+              </article>
+            </div>
+            <div v-else class="home-appointments-empty">
+              当前还没有读到知识文档。
+            </div>
+          </section>
+
+          <aside class="appointment-summary rag-summary">
+            <p class="entity-tag">Query 测试</p>
+            <el-form label-position="top" class="editor-form" @submit.prevent="submitRagSearch">
+              <el-form-item label="检索问题">
+                <el-input
+                  v-model="ragSearchForm.query"
+                  type="textarea"
+                  :rows="4"
+                  placeholder="例如：胸闷心悸，活动后气短，应该挂哪个科室？"
+                />
+              </el-form-item>
+              <el-form-item label="Top K">
+                <el-input v-model="ragSearchForm.topK" type="number" min="1" max="10" />
+              </el-form-item>
+              <div class="appointment-actions">
+                <el-button type="primary" :loading="isSearchingRag" @click="submitRagSearch">
+                  开始检索
+                </el-button>
+              </div>
+            </el-form>
+
+            <div class="rag-search-results">
+              <h3>检索结果</h3>
+              <div v-if="ragSearchResults.length" class="rag-search-list">
+                <article
+                  v-for="item in ragSearchResults"
+                  :key="item.id"
+                  class="rag-search-card"
+                >
+                  <div class="rag-document-top">
+                    <div>
+                      <p class="entity-tag">{{ item.metadata?.type || "knowledge" }}</p>
+                      <h4>{{ item.id }}</h4>
+                    </div>
+                    <span class="detail-side">distance: {{ item.distance?.toFixed?.(4) ?? item.distance }}</span>
+                  </div>
+                  <p>{{ item.text }}</p>
+                  <pre class="rag-metadata">{{ formatMetadata(item.metadata) }}</pre>
+                </article>
+              </div>
+              <div v-else class="home-appointments-empty">
+                先输入一个 query 试试检索效果。
+              </div>
+            </div>
           </aside>
         </div>
       </section>
@@ -2890,6 +3979,22 @@ onMounted(() => {
                 </div>
               </div>
             </article>
+          </section>
+
+          <section
+            v-if="activeModule !== 'appointment' && currentVisibleItems.length && currentAdminPagination"
+            class="pagination-panel"
+          >
+            <el-pagination
+              :current-page="currentAdminPagination.page"
+              :page-size="currentAdminPagination.size"
+              :page-sizes="[12, 24, 48]"
+              :total="currentAdminPagination.total"
+              background
+              layout="total, sizes, prev, pager, next"
+              @current-change="handleAdminPageChange"
+              @size-change="handleAdminPageSizeChange"
+            />
           </section>
 
           <section v-if="activeModule === 'appointment' && currentVisibleItems.length" class="list-grid appointment-grid">

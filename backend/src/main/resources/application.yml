@@ -30,6 +30,8 @@ server:
   port: 8080
 
 app:
+  demo-data:
+    enabled: ${APP_DEMO_DATA_ENABLED:true}
   admin:
     phone: ${ADMIN_PHONE:13800000000}
     password: ${ADMIN_PASSWORD:040130}

@@ -1,0 +1,104 @@
+[
+  {
+    "id": "triage-obstetrics-symptom-match",
+    "text": "产科门诊适合孕期建档、常规产检、胎动变化、孕期不适、孕吐及孕周管理等场景，适用于需要按孕周继续门诊管理的人群。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "产科门诊",
+      "department_aliases": "产科,产检,孕产,孕期门诊",
+      "tags": "孕期,产检,胎动,出血,腹痛,孕吐",
+      "symptom_tags": "孕期不适,产检,胎动变化,腹痛,出血,恶心",
+      "scene_tags": "怀孕了看什么科,产检,胎动不太对",
+      "intent_signals": "挂产科,孕期挂什么科,产检预约",
+      "urgency_level": "normal",
+      "audience": "pregnant",
+      "intent_type": "symptom_match",
+      "priority": 10
+    }
+  },
+  {
+    "id": "triage-obstetrics-follow-up",
+    "text": "产科方向导诊时应重点追问孕周、胎动是否减少、是否有阴道出血、腹痛强度、破水可能、是否规律宫缩，以及既往产检和高危妊娠史。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "产科门诊",
+      "department_aliases": "产科,产检,孕产,孕期门诊",
+      "tags": "孕周,胎动减少,阴道出血,腹痛,破水,宫缩",
+      "symptom_tags": "胎动异常,出血,腹痛,破水,宫缩",
+      "scene_tags": "胎动少了,见红了,会不会破水,宫缩规律吗",
+      "intent_signals": "怀孕几周,胎动怎么样,有没有出血,有没有破水",
+      "urgency_level": "normal",
+      "audience": "pregnant",
+      "intent_type": "follow_up",
+      "priority": 10
+    }
+  },
+  {
+    "id": "triage-obstetrics-red-flags",
+    "text": "若孕期出现明显腹痛、阴道出血、胎动明显减少、疑似破水、头痛眼花或突发水肿，应及时线下急诊评估，不宜延迟。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "产科门诊",
+      "department_aliases": "产科,产检,孕产,孕期门诊",
+      "tags": "明显腹痛,阴道出血,胎动异常,破水,头痛眼花,水肿",
+      "symptom_tags": "腹痛,出血,胎动异常,破水,头痛,水肿",
+      "scene_tags": "孕期危险信号,要不要急诊,见红腹痛",
+      "intent_signals": "孕期要不要急诊,破水怎么办,出血严重吗",
+      "urgency_level": "emergency",
+      "audience": "pregnant",
+      "intent_type": "red_flag",
+      "priority": 12
+    }
+  },
+  {
+    "id": "triage-obstetrics-boundary-cases",
+    "text": "若并非已知妊娠，而只是月经推迟、下腹痛、少量出血等，也需要和妇科、急诊或全科方向区分；已经明确怀孕时则优先考虑产科门诊评估。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "产科门诊",
+      "department_aliases": "产科,产检,孕产,孕期门诊",
+      "tags": "月经推迟,下腹痛,少量出血,妇科区分,已知妊娠",
+      "symptom_tags": "腹痛,出血,停经,孕期不适",
+      "scene_tags": "产科还是妇科,怀孕前后怎么分,见红挂哪科",
+      "intent_signals": "挂产科还是妇科,停经腹痛看什么科,孕期出血挂哪科",
+      "urgency_level": "normal",
+      "audience": "pregnant",
+      "intent_type": "boundary_cases",
+      "priority": 10
+    }
+  },
+  {
+    "id": "triage-obstetrics-recommendation-request",
+    "text": "如果用户直接希望推荐产科医生、预约产检或咨询孕期挂号，且问题集中在孕周管理、胎动、产检安排，可优先走产科门诊并按孕周筛选医生。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "产科门诊",
+      "department_aliases": "产科,产检,孕产,孕期门诊",
+      "tags": "推荐医生,产检预约,挂号,孕周,胎动",
+      "symptom_tags": "产检,胎动变化,孕期不适,腹痛,出血",
+      "scene_tags": "推荐产科医生,预约产检,孕期挂号",
+      "intent_signals": "推荐产科医生,产检预约,挂产科,孕妇挂号",
+      "urgency_level": "normal",
+      "audience": "pregnant",
+      "intent_type": "recommendation_request",
+      "priority": 11
+    }
+  },
+  {
+    "id": "triage-obstetrics-special-population",
+    "text": "高危妊娠、既往流产史、妊娠高血压、双胎或试管妊娠人群，即使症状不算特别重，也应提高产科方向关注，必要时尽快线下评估。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "产科门诊",
+      "department_aliases": "产科,产检,孕产,孕期门诊",
+      "tags": "高危妊娠,流产史,妊娠高血压,双胎,试管妊娠",
+      "symptom_tags": "腹痛,出血,胎动异常,头痛,水肿",
+      "scene_tags": "高危孕妇,双胎,有流产史,试管怀孕",
+      "intent_signals": "高危妊娠挂什么科,双胎产检,有流产史怎么办",
+      "urgency_level": "soon",
+      "audience": "pregnant",
+      "intent_type": "special_population",
+      "priority": 11
+    }
+  }
+]

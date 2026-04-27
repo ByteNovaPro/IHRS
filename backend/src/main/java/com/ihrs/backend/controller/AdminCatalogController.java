@@ -6,9 +6,9 @@ import com.ihrs.backend.dto.DoctorRequest;
 import com.ihrs.backend.dto.DoctorResponse;
 import com.ihrs.backend.dto.HospitalRequest;
 import com.ihrs.backend.dto.HospitalResponse;
+import com.ihrs.backend.dto.PageResponse;
 import com.ihrs.backend.service.AdminCatalogService;
 import jakarta.validation.Valid;
-import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,8 +32,12 @@ public class AdminCatalogController {
     }
 
     @GetMapping("/hospitals")
-    public List<HospitalResponse> listHospitals() {
-        return adminCatalogService.listHospitals();
+    public PageResponse<HospitalResponse> listHospitals(
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "12") int size,
+        @RequestParam(defaultValue = "") String keyword
+    ) {
+        return adminCatalogService.listHospitals(page, size, keyword);
     }
 
     @GetMapping("/hospitals/{id}")
@@ -59,8 +63,13 @@ public class AdminCatalogController {
     }
 
     @GetMapping("/rooms")
-    public List<ClinicRoomResponse> listRooms(@RequestParam(required = false) Long hospitalId) {
-        return adminCatalogService.listRooms(hospitalId);
+    public PageResponse<ClinicRoomResponse> listRooms(
+        @RequestParam(required = false) Long hospitalId,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "12") int size,
+        @RequestParam(defaultValue = "") String keyword
+    ) {
+        return adminCatalogService.listRooms(hospitalId, page, size, keyword);
     }
 
     @GetMapping("/rooms/{id}")
@@ -86,11 +95,15 @@ public class AdminCatalogController {
     }
 
     @GetMapping("/doctors")
-    public List<DoctorResponse> listDoctors(
+    public PageResponse<DoctorResponse> listDoctors(
         @RequestParam(required = false) Long hospitalId,
-        @RequestParam(required = false) Long roomId
+        @RequestParam(required = false) Long roomId,
+        @RequestParam(required = false) String workTimeSlot,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "12") int size,
+        @RequestParam(defaultValue = "") String keyword
     ) {
-        return adminCatalogService.listDoctors(hospitalId, roomId);
+        return adminCatalogService.listDoctors(hospitalId, roomId, workTimeSlot, page, size, keyword);
     }
 
     @GetMapping("/doctors/{id}")

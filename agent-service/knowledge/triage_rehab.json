@@ -1,0 +1,104 @@
+[
+  {
+    "id": "triage-rehab-symptom-match",
+    "text": "针灸康复科适合颈肩腰腿痛、运动损伤、落枕、肩周炎、慢性劳损及术后康复等以疼痛和功能恢复为主的场景。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "针灸康复科",
+      "department_aliases": "康复,康复科,针灸,理疗,推拿",
+      "tags": "颈肩腰腿痛,康复,扭伤,肩周炎,运动损伤,劳损",
+      "symptom_tags": "颈痛,肩痛,腰腿痛,运动损伤,康复,僵硬",
+      "scene_tags": "脖子疼,腰疼,肩膀抬不起来,运动拉伤",
+      "intent_signals": "腰疼挂什么科,康复科挂号,针灸理疗看哪个科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "symptom_match",
+      "priority": 8
+    }
+  },
+  {
+    "id": "triage-rehab-follow-up",
+    "text": "康复方向导诊时应追问疼痛部位、持续时间、是否外伤后出现、活动是否受限、是否伴麻木无力，以及既往影像检查、手术史和治疗情况。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "针灸康复科",
+      "department_aliases": "康复,康复科,针灸,理疗,推拿",
+      "tags": "疼痛部位,持续时间,外伤,活动受限,麻木无力,影像检查",
+      "symptom_tags": "颈肩腰腿痛,麻木,运动损伤,活动受限,无力",
+      "scene_tags": "哪里疼,动不了怎么办,受伤后开始疼,有没有麻",
+      "intent_signals": "疼了多久,是不是摔过,有没有麻木,活动受限吗",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "follow_up",
+      "priority": 8
+    }
+  },
+  {
+    "id": "triage-rehab-red-flags",
+    "text": "若麻木无力迅速加重、疼痛剧烈难忍、出现大小便功能异常、发热伴脊柱疼痛或明显新发外伤后畸形，应及时线下评估，不宜仅做康复门诊分流。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "针灸康复科",
+      "department_aliases": "康复,康复科,针灸,理疗,推拿",
+      "tags": "麻木无力加重,疼痛剧烈,大小便异常,发热,脊柱疼痛,外伤畸形",
+      "symptom_tags": "麻木无力,剧烈疼痛,外伤,神经受压,发热",
+      "scene_tags": "腿麻越来越重,疼得受不了,要不要急诊",
+      "intent_signals": "严重吗,要不要急诊,外伤后变形怎么办,麻木无力危险吗",
+      "urgency_level": "soon",
+      "audience": "general",
+      "intent_type": "red_flag",
+      "priority": 11
+    }
+  },
+  {
+    "id": "triage-rehab-boundary-cases",
+    "text": "如果疼痛伴明显胸闷胸痛、发热咳嗽、腹痛或系统性症状，需要和心内、呼吸、消化或全科方向区分；单纯慢性肌肉骨骼疼痛和康复需求则更适合针灸康复科。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "针灸康复科",
+      "department_aliases": "康复,康复科,针灸,理疗,推拿",
+      "tags": "胸闷胸痛,发热咳嗽,腹痛,系统性症状,慢性疼痛",
+      "symptom_tags": "颈肩腰腿痛,发热,胸痛,腹痛,乏力",
+      "scene_tags": "是康复科还是内科,腰疼会不会不是肌肉问题,怎么区分",
+      "intent_signals": "腰疼挂康复还是骨科,肩痛看哪科,需不需要先全科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "boundary_cases",
+      "priority": 8
+    }
+  },
+  {
+    "id": "triage-rehab-recommendation-request",
+    "text": "如果用户直接希望推荐康复科医生、预约理疗针灸或术后康复门诊，且问题集中在颈肩腰腿痛、运动损伤或恢复训练，可优先走针灸康复科并继续补充受伤背景。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "针灸康复科",
+      "department_aliases": "康复,康复科,针灸,理疗,推拿",
+      "tags": "推荐医生,预约,理疗,针灸,术后康复,运动损伤",
+      "symptom_tags": "腰腿痛,颈肩痛,运动损伤,康复,活动受限",
+      "scene_tags": "推荐康复科医生,理疗预约,针灸挂号",
+      "intent_signals": "推荐康复医生,挂康复科,预约理疗,针灸门诊",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "recommendation_request",
+      "priority": 9
+    }
+  },
+  {
+    "id": "triage-rehab-special-population",
+    "text": "术后恢复期、长期伏案人群、老年退行性骨关节问题患者，以及反复扭伤劳损的人群，更适合结合康复方向持续评估和治疗计划。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "针灸康复科",
+      "department_aliases": "康复,康复科,针灸,理疗,推拿",
+      "tags": "术后恢复,伏案,老年退变,反复扭伤,劳损",
+      "symptom_tags": "颈肩痛,腰腿痛,活动受限,劳损,关节痛",
+      "scene_tags": "术后康复,久坐腰痛,老人关节痛",
+      "intent_signals": "术后康复挂什么科,久坐腰疼看哪科,老人关节痛挂什么科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "special_population",
+      "priority": 8
+    }
+  }
+]

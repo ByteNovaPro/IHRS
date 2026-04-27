@@ -1,0 +1,104 @@
+[
+  {
+    "id": "triage-dentistry-symptom-match",
+    "text": "口腔专科适合牙痛、牙龈肿痛、龋齿、智齿不适、口腔溃疡、口腔修复咨询等常见口腔问题，适合先做专科门诊评估。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "口腔专科",
+      "department_aliases": "口腔,牙科,口腔科,牙医,牙齿",
+      "tags": "牙痛,牙龈,龋齿,智齿,口腔溃疡,修复",
+      "symptom_tags": "牙痛,牙龈肿痛,龋齿,智齿发炎,口腔不适",
+      "scene_tags": "牙疼,牙龈肿了,智齿疼,吃东西牙疼",
+      "intent_signals": "牙痛挂什么科,口腔科挂号,看牙挂哪个科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "symptom_match",
+      "priority": 8
+    }
+  },
+  {
+    "id": "triage-dentistry-follow-up",
+    "text": "口腔方向导诊时应追问疼痛部位、持续时间、是否冷热刺激痛、是否夜间加重、是否影响咀嚼进食，以及是否有近期补牙、拔牙或正畸治疗史。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "口腔专科",
+      "department_aliases": "口腔,牙科,口腔科,牙医,牙齿",
+      "tags": "疼痛部位,持续时间,冷热刺激痛,夜间加重,进食,治疗史",
+      "symptom_tags": "牙痛,牙龈肿痛,进食困难,口腔溃疡",
+      "scene_tags": "喝冷水疼,晚上更疼,咬东西疼,最近补过牙",
+      "intent_signals": "疼了多久,冷热会不会疼,能不能吃东西,最近看过牙吗",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "follow_up",
+      "priority": 7
+    }
+  },
+  {
+    "id": "triage-dentistry-red-flags",
+    "text": "若出现面部明显肿胀、张口困难、化脓、发热伴牙源性感染扩散、吞咽困难或呼吸受影响，建议尽快线下就医，必要时转急诊处理。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "口腔专科",
+      "department_aliases": "口腔,牙科,口腔科,牙医,牙齿",
+      "tags": "面部肿胀,张口困难,化脓,感染扩散,吞咽困难,呼吸受影响",
+      "symptom_tags": "面部肿胀,张口困难,化脓,发热,呼吸困难",
+      "scene_tags": "脸肿了,张不开嘴,牙疼发烧,要不要急诊",
+      "intent_signals": "严重吗,要不要急诊,牙龈肿得厉害怎么办,脸肿危险吗",
+      "urgency_level": "soon",
+      "audience": "general",
+      "intent_type": "red_flag",
+      "priority": 10
+    }
+  },
+  {
+    "id": "triage-dentistry-boundary-cases",
+    "text": "如果主要是不明原因面部疼痛、耳前疼痛或外伤后牙齿松动，需要和外科或康复方向区分；但对牙痛、牙龈肿痛、口腔溃疡等典型问题，仍优先考虑口腔专科。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "口腔专科",
+      "department_aliases": "口腔,牙科,口腔科,牙医,牙齿",
+      "tags": "面部疼痛,耳前疼痛,外伤,牙齿松动,口腔溃疡",
+      "symptom_tags": "牙痛,牙龈肿痛,面部疼痛,外伤",
+      "scene_tags": "口腔还是外科,摔伤后牙松了,口腔溃疡看哪个科",
+      "intent_signals": "牙痛挂口腔还是外科,口腔溃疡挂什么科,摔伤牙齿看哪科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "boundary_cases",
+      "priority": 8
+    }
+  },
+  {
+    "id": "triage-dentistry-recommendation-request",
+    "text": "如果用户直接想挂牙科、推荐口腔医生或预约洁牙补牙，且问题集中在牙痛、牙龈肿痛、龋齿、智齿等口腔问题，可优先走口腔专科并继续追问症状严重程度。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "口腔专科",
+      "department_aliases": "口腔,牙科,口腔科,牙医,牙齿",
+      "tags": "挂号,推荐医生,牙科,口腔科,洁牙,补牙",
+      "symptom_tags": "牙痛,牙龈肿痛,龋齿,智齿,口腔不适",
+      "scene_tags": "推荐牙科医生,口腔科挂号,预约补牙",
+      "intent_signals": "推荐口腔医生,挂牙科,预约洁牙,补牙挂号",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "recommendation_request",
+      "priority": 9
+    }
+  },
+  {
+    "id": "triage-dentistry-special-population",
+    "text": "儿童乳牙问题、孕期牙龈肿痛、糖尿病患者口腔感染或长期反复牙龈出血的人群，需要更重视口腔方向评估，必要时尽快线下就诊。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "口腔专科",
+      "department_aliases": "口腔,牙科,口腔科,牙医,牙齿",
+      "tags": "儿童乳牙,孕期,糖尿病,牙龈出血,反复感染",
+      "symptom_tags": "牙痛,牙龈肿痛,出血,口腔感染",
+      "scene_tags": "孩子蛀牙,孕妇牙疼,牙龈老出血",
+      "intent_signals": "孩子牙疼挂什么科,孕妇牙龈肿怎么办,牙龈出血看哪科",
+      "urgency_level": "soon",
+      "audience": "general",
+      "intent_type": "special_population",
+      "priority": 9
+    }
+  }
+]

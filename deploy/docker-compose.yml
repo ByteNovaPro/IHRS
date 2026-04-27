@@ -55,6 +55,34 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CONSULT_CONTEXT_TTL_SECONDS: ${CONSULT_CONTEXT_TTL_SECONDS:-43200}
+      CONSULT_CONTEXT_MAX_MESSAGES: ${CONSULT_CONTEXT_MAX_MESSAGES:-12}
+      RAG_EMBEDDING_MODEL_NAME: ${RAG_EMBEDDING_MODEL_NAME:-BAAI/bge-small-zh-v1.5}
+      RAG_EMBEDDING_DEVICE: ${RAG_EMBEDDING_DEVICE:-cpu}
+      MCP_SERVER_URL: http://mcp-server:8100/mcp
+      MCP_SERVER_TIMEOUT_SECONDS: ${MCP_SERVER_TIMEOUT_SECONDS:-20}
+    depends_on:
+      redis:
+        condition: service_started
+      mcp-server:
+        condition: service_started
+    volumes:
+      - ../agent-service/chroma_db:/app/chroma_db
+    networks:
+      - ihrs-network
+
+  mcp-server:
+    build:
+      context: ../agent-service
+      dockerfile: Dockerfile.mcp
+    container_name: ihrs-mcp-server
+    ports:
+      - "${MCP_PORT:-8100}:8100"
+    environment:
+      BACKEND_BASE_URL: http://backend:8080
+      BACKEND_TIMEOUT_SECONDS: ${BACKEND_TIMEOUT_SECONDS:-15}
     networks:
       - ihrs-network
 

@@ -1,0 +1,104 @@
+[
+  {
+    "id": "triage-digestive-symptom-match",
+    "text": "消化诊室适合胃痛、反酸、烧心、腹胀、腹泻、便秘、恶心等胃肠道相关症状，适合先做消化系统门诊评估。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "消化诊室",
+      "department_aliases": "消化,消化科,胃肠科,肠胃科",
+      "tags": "胃痛,反酸,烧心,腹胀,腹泻,便秘,恶心",
+      "symptom_tags": "胃痛,反酸,烧心,腹胀,腹泻,便秘,肚子不舒服",
+      "scene_tags": "胃里烧得慌,肚子胀,拉肚子,便秘",
+      "intent_signals": "胃痛挂什么科,肚子不舒服看哪个科,消化科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "symptom_match",
+      "priority": 9
+    }
+  },
+  {
+    "id": "triage-digestive-follow-up",
+    "text": "消化方向导诊时应追问症状持续时间、饭前饭后关系、是否伴恶心呕吐、食欲下降、黑便、便血、夜间腹痛或近期明显体重下降。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "消化诊室",
+      "department_aliases": "消化,消化科,胃肠科,肠胃科",
+      "tags": "持续时间,饭前饭后,恶心呕吐,黑便,便血,体重下降",
+      "symptom_tags": "胃痛,腹痛,反酸,腹泻,便秘,呕吐",
+      "scene_tags": "饭后更难受,空腹疼,拉黑便,最近瘦了",
+      "intent_signals": "多久了,饭前还是饭后,有没有黑便,有没有呕吐",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "follow_up",
+      "priority": 8
+    }
+  },
+  {
+    "id": "triage-digestive-red-flags",
+    "text": "若腹痛剧烈且持续加重，或伴呕血、黑便、明显脱水、持续呕吐、无法进食，应及时急诊，不建议仅做普通门诊分流。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "消化诊室",
+      "department_aliases": "消化,消化科,胃肠科,肠胃科",
+      "tags": "剧烈腹痛,呕血,黑便,脱水,持续呕吐,无法进食",
+      "symptom_tags": "剧烈腹痛,呕血,黑便,脱水,反复呕吐",
+      "scene_tags": "危险腹痛,要不要急诊,出血,拉黑便",
+      "intent_signals": "严重吗,要不要急诊,黑便危险吗,呕血怎么办",
+      "urgency_level": "emergency",
+      "audience": "general",
+      "intent_type": "red_flag",
+      "priority": 12
+    }
+  },
+  {
+    "id": "triage-digestive-boundary-cases",
+    "text": "如果腹痛伴发热咳嗽、胸闷气短、月经异常或孕期出血，需要和呼吸、心内、妇产方向区分；若只是轻度腹痛、乏力、定位不清，也可先从全科/内科初诊进入。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "消化诊室",
+      "department_aliases": "消化,消化科,胃肠科,肠胃科",
+      "tags": "腹痛,发热,咳嗽,月经异常,孕期出血,定位不清",
+      "symptom_tags": "腹痛,发热,腹泻,恶心,腹胀",
+      "scene_tags": "肚子疼是消化科还是妇科,腹痛先看哪个科,和全科怎么区分",
+      "intent_signals": "腹痛挂什么科,胃肠还是妇科,需不需要先全科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "boundary_cases",
+      "priority": 9
+    }
+  },
+  {
+    "id": "triage-digestive-recommendation-request",
+    "text": "如果用户直接提出想挂消化科、推荐胃肠方面医生，且主要不适集中在胃痛、反酸、腹泻、便秘或腹胀，可优先走消化诊室并继续追问严重程度和持续时间。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "消化诊室",
+      "department_aliases": "消化,消化科,胃肠科,肠胃科",
+      "tags": "挂号,推荐医生,消化科,胃肠科,胃痛",
+      "symptom_tags": "胃痛,反酸,腹泻,便秘,腹胀",
+      "scene_tags": "推荐医生,挂消化科,胃肠专科预约",
+      "intent_signals": "推荐消化科医生,胃痛挂号,挂胃肠科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "recommendation_request",
+      "priority": 10
+    }
+  },
+  {
+    "id": "triage-digestive-special-population",
+    "text": "老年人、长期服用止痛药、近期大量饮酒、既往有胃病或消化道出血史的人群，如果出现腹痛、反酸或黑便，需要更谨慎评估消化方向风险。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "消化诊室",
+      "department_aliases": "消化,消化科,胃肠科,肠胃科",
+      "tags": "老年人,止痛药,饮酒,胃病史,消化道出血史",
+      "symptom_tags": "腹痛,反酸,黑便,胃痛,呕吐",
+      "scene_tags": "有胃病史,老人胃痛,长期吃药后胃不舒服",
+      "intent_signals": "老人胃痛挂什么科,有胃病史怎么办,黑便要紧吗",
+      "urgency_level": "soon",
+      "audience": "general",
+      "intent_type": "special_population",
+      "priority": 10
+    }
+  }
+]

@@ -1,0 +1,104 @@
+[
+  {
+    "id": "triage-respiratory-symptom-match",
+    "text": "呼吸诊室适合发热、咳嗽、咳痰、喘息、呼吸不适、喉咙痛后伴咳嗽等呼吸系统症状，适合先做呼吸科门诊分诊。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "呼吸诊室",
+      "department_aliases": "呼吸,呼吸科,肺科,呼吸内科",
+      "tags": "发热,咳嗽,咳痰,喘息,呼吸困难,喉咙痛",
+      "symptom_tags": "发热,咳嗽,咳痰,喘息,呼吸不适,咽痛",
+      "scene_tags": "咳嗽老不好,喘不上气,肺不舒服",
+      "intent_signals": "咳嗽挂什么科,发热咳嗽看哪个科,呼吸科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "symptom_match",
+      "priority": 10
+    }
+  },
+  {
+    "id": "triage-respiratory-follow-up",
+    "text": "呼吸方向导诊时应重点追问体温、咳嗽持续天数、痰色、是否夜间加重、是否伴气促胸闷、咽痛流涕，以及是否有受凉或接触发热患者的经历。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "呼吸诊室",
+      "department_aliases": "呼吸,呼吸科,肺科,呼吸内科",
+      "tags": "体温,咳嗽天数,痰色,夜间加重,气促,胸闷,流涕",
+      "symptom_tags": "发热,咳嗽,咳痰,气促,胸闷,咽痛",
+      "scene_tags": "咳了几天,晚上加重吗,痰是什么颜色",
+      "intent_signals": "多久了,晚上会不会更严重,有没有痰,体温多少",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "follow_up",
+      "priority": 9
+    }
+  },
+  {
+    "id": "triage-respiratory-red-flags",
+    "text": "若持续高热、明显气喘、呼吸困难、口唇发紫、胸痛明显或精神状态变差，应尽快线下就医，严重时优先急诊。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "呼吸诊室",
+      "department_aliases": "呼吸,呼吸科,肺科,呼吸内科",
+      "tags": "持续高热,气喘,呼吸困难,口唇发紫,胸痛,精神差",
+      "symptom_tags": "持续高热,呼吸困难,明显气喘,胸痛,发紫",
+      "scene_tags": "喘不上气,高热不退,要不要急诊",
+      "intent_signals": "严重吗,要不要急诊,呼吸困难怎么办,高烧危险吗",
+      "urgency_level": "soon",
+      "audience": "general",
+      "intent_type": "red_flag",
+      "priority": 12
+    }
+  },
+  {
+    "id": "triage-respiratory-boundary-cases",
+    "text": "如果只是轻度发热乏力而缺少明显咳嗽、咳痰、喘息等呼吸道表现，可先从全科/内科初诊进入；若胸闷胸痛更突出，也需和心内方向区分。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "呼吸诊室",
+      "department_aliases": "呼吸,呼吸科,肺科,呼吸内科",
+      "tags": "轻度发热,乏力,缺少呼吸道表现,胸闷胸痛,心内区分",
+      "symptom_tags": "发热,乏力,咳嗽,胸闷,胸痛",
+      "scene_tags": "是呼吸科还是心内科,发烧先挂哪个科,先全科还是呼吸",
+      "intent_signals": "咳嗽挂什么科,胸闷是肺还是心脏,需不需要先全科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "boundary_cases",
+      "priority": 9
+    }
+  },
+  {
+    "id": "triage-respiratory-recommendation-request",
+    "text": "如果用户直接希望推荐呼吸科医生、预约挂号或推荐医院，且症状集中在发热、咳嗽、咳痰、气喘等呼吸道不适，可优先走呼吸诊室并继续追问持续时间和严重程度。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "呼吸诊室",
+      "department_aliases": "呼吸,呼吸科,肺科,呼吸内科",
+      "tags": "推荐医生,挂号,预约,呼吸科,医院推荐",
+      "symptom_tags": "发热,咳嗽,咳痰,气喘,胸闷",
+      "scene_tags": "推荐呼吸科医生,呼吸科挂号,医院推荐",
+      "intent_signals": "推荐呼吸科医生,发热咳嗽挂号,挂呼吸科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "recommendation_request",
+      "priority": 10
+    }
+  },
+  {
+    "id": "triage-respiratory-special-population",
+    "text": "老年人、慢阻肺哮喘患者、长期吸烟者或近期流感后恢复不佳的人群，如果出现发热、咳嗽、气促，即使症状描述不多，也应提高对呼吸方向的关注。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "呼吸诊室",
+      "department_aliases": "呼吸,呼吸科,肺科,呼吸内科",
+      "tags": "老年人,哮喘,慢阻肺,吸烟,流感后",
+      "symptom_tags": "发热,咳嗽,气促,喘息,呼吸不适",
+      "scene_tags": "老人咳嗽喘,有哮喘,吸烟后咳嗽",
+      "intent_signals": "老年人咳嗽挂什么科,哮喘发作看哪科,慢阻肺复诊",
+      "urgency_level": "soon",
+      "audience": "general",
+      "intent_type": "special_population",
+      "priority": 10
+    }
+  }
+]

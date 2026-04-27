@@ -1,0 +1,104 @@
+[
+  {
+    "id": "triage-pediatrics-symptom-match",
+    "text": "儿科门诊适合儿童发热、咳嗽、流涕、腹泻、食欲差、皮疹等常见儿童症状，尤其适用于需要结合年龄做初步分诊的情况。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "儿科门诊",
+      "department_aliases": "儿科,小儿科,儿童门诊,宝宝门诊",
+      "tags": "儿童,发热,咳嗽,流涕,腹泻,皮疹",
+      "symptom_tags": "儿童发热,儿童咳嗽,流涕,腹泻,食欲差,出疹子",
+      "scene_tags": "孩子发烧,宝宝咳嗽,小孩没精神",
+      "intent_signals": "孩子挂什么科,宝宝看哪个科,儿科挂号",
+      "urgency_level": "normal",
+      "audience": "children",
+      "intent_type": "symptom_match",
+      "priority": 10
+    }
+  },
+  {
+    "id": "triage-pediatrics-follow-up",
+    "text": "儿科方向导诊时应追问年龄、体温、精神状态、进食饮水、尿量、睡眠、是否哭闹不止，以及近期接触史和疫苗接种情况。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "儿科门诊",
+      "department_aliases": "儿科,小儿科,儿童门诊,宝宝门诊",
+      "tags": "年龄,体温,精神状态,进食饮水,尿量,哭闹",
+      "symptom_tags": "发热,咳嗽,腹泻,精神差,食欲差",
+      "scene_tags": "孩子多大了,喝水怎么样,尿量少不少,一直闹",
+      "intent_signals": "几岁了,体温多少,精神好吗,喝水怎么样",
+      "urgency_level": "normal",
+      "audience": "children",
+      "intent_type": "follow_up",
+      "priority": 9
+    }
+  },
+  {
+    "id": "triage-pediatrics-red-flags",
+    "text": "若儿童出现精神差、抽搐、明显脱水、持续高热不退、呼吸费力、嘴唇发紫或持续呕吐，应尽快线下就诊，必要时优先急诊。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "儿科门诊",
+      "department_aliases": "儿科,小儿科,儿童门诊,宝宝门诊",
+      "tags": "精神差,抽搐,脱水,持续高热,呼吸费力,嘴唇发紫,持续呕吐",
+      "symptom_tags": "精神差,抽搐,脱水,持续高热,呼吸困难,发紫",
+      "scene_tags": "孩子危险信号,要不要急诊,高烧不退",
+      "intent_signals": "孩子要不要急诊,高烧危险吗,抽搐怎么办",
+      "urgency_level": "soon",
+      "audience": "children",
+      "intent_type": "red_flag",
+      "priority": 12
+    }
+  },
+  {
+    "id": "triage-pediatrics-boundary-cases",
+    "text": "如果孩子只是单纯牙痛、明确外伤或已知孕产相关问题，则不一定首选儿科；但对婴幼儿和学龄前儿童，大多数发热咳嗽腹泻等常见症状仍应优先考虑儿科门诊。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "儿科门诊",
+      "department_aliases": "儿科,小儿科,儿童门诊,宝宝门诊",
+      "tags": "牙痛,外伤,孕产相关,婴幼儿,学龄前",
+      "symptom_tags": "发热,咳嗽,腹泻,流涕,呕吐",
+      "scene_tags": "孩子是不是一定挂儿科,儿科和口腔外伤怎么分",
+      "intent_signals": "孩子看什么科,要不要挂儿科,儿童症状怎么分",
+      "urgency_level": "normal",
+      "audience": "children",
+      "intent_type": "boundary_cases",
+      "priority": 9
+    }
+  },
+  {
+    "id": "triage-pediatrics-recommendation-request",
+    "text": "如果家长直接提出挂号、推荐医生或儿童医院诉求，而孩子的症状集中在发热、咳嗽、腹泻、皮疹等常见儿科问题，可优先走儿科门诊并继续补充年龄和精神状态。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "儿科门诊",
+      "department_aliases": "儿科,小儿科,儿童门诊,宝宝门诊",
+      "tags": "挂号,推荐医生,儿童医院,儿科,家长",
+      "symptom_tags": "发热,咳嗽,腹泻,皮疹,食欲差",
+      "scene_tags": "推荐儿科医生,儿童医院挂号,孩子预约",
+      "intent_signals": "推荐儿科医生,孩子挂号,儿童医院推荐",
+      "urgency_level": "normal",
+      "audience": "children",
+      "intent_type": "recommendation_request",
+      "priority": 10
+    }
+  },
+  {
+    "id": "triage-pediatrics-special-population",
+    "text": "婴幼儿、早产儿、有基础心肺疾病或近期高热史的儿童，即使症状描述较简单，也应提高儿科方向关注，必要时尽快线下评估。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "儿科门诊",
+      "department_aliases": "儿科,小儿科,儿童门诊,宝宝门诊",
+      "tags": "婴幼儿,早产儿,基础病,心肺疾病,高热史",
+      "symptom_tags": "发热,咳嗽,气喘,精神差,进食差",
+      "scene_tags": "小宝宝发烧,早产儿不舒服,有基础病的孩子",
+      "intent_signals": "婴儿发烧看什么科,宝宝高热怎么办,基础病儿童",
+      "urgency_level": "soon",
+      "audience": "children",
+      "intent_type": "special_population",
+      "priority": 11
+    }
+  }
+]

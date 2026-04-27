@@ -6,6 +6,7 @@ import com.ihrs.backend.dto.DoctorRequest;
 import com.ihrs.backend.dto.DoctorResponse;
 import com.ihrs.backend.dto.HospitalRequest;
 import com.ihrs.backend.dto.HospitalResponse;
+import com.ihrs.backend.dto.PageResponse;
 import com.ihrs.backend.entity.ClinicRoom;
 import com.ihrs.backend.entity.Doctor;
 import com.ihrs.backend.entity.Hospital;
@@ -14,10 +15,12 @@ import com.ihrs.backend.exception.ResourceNotFoundException;
 import com.ihrs.backend.repository.ClinicRoomRepository;
 import com.ihrs.backend.repository.DoctorRepository;
 import com.ihrs.backend.repository.HospitalRepository;
-import java.util.Comparator;
-import java.util.List;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
 
 @Service
 @Transactional
@@ -38,9 +41,21 @@ public class AdminCatalogService {
     }
 
     @Transactional(readOnly = true)
+    public PageResponse<HospitalResponse> listHospitals(int page, int size, String keyword) {
+        Pageable pageable = buildPageable(page, size);
+        var hospitalPage = hospitalRepository.search(normalizeKeyword(keyword), pageable);
+        return new PageResponse<>(
+            hospitalPage.getContent().stream().map(this::toHospitalResponse).toList(),
+            hospitalPage.getTotalElements(),
+            hospitalPage.getTotalPages(),
+            hospitalPage.getNumber(),
+            hospitalPage.getSize()
+        );
+    }
+
+    @Transactional(readOnly = true)
     public List<HospitalResponse> listHospitals() {
-        return hospitalRepository.findAll().stream()
-            .sorted(Comparator.comparing(Hospital::getId))
+        return hospitalRepository.findAll(Sort.by(Sort.Direction.ASC, "id")).stream()
             .map(this::toHospitalResponse)
             .toList();
     }
@@ -67,13 +82,25 @@ public class AdminCatalogService {
     }
 
     @Transactional(readOnly = true)
+    public PageResponse<ClinicRoomResponse> listRooms(Long hospitalId, int page, int size, String keyword) {
+        Pageable pageable = buildPageable(page, size);
+        var roomPage = clinicRoomRepository.search(hospitalId, normalizeKeyword(keyword), pageable);
+        return new PageResponse<>(
+            roomPage.getContent().stream().map(this::toClinicRoomResponse).toList(),
+            roomPage.getTotalElements(),
+            roomPage.getTotalPages(),
+            roomPage.getNumber(),
+            roomPage.getSize()
+        );
+    }
+
+    @Transactional(readOnly = true)
     public List<ClinicRoomResponse> listRooms(Long hospitalId) {
         List<ClinicRoom> rooms = hospitalId == null
-            ? clinicRoomRepository.findAll()
+            ? clinicRoomRepository.findAll(Sort.by(Sort.Direction.ASC, "id"))
             : clinicRoomRepository.findByHospitalId(hospitalId);
 
         return rooms.stream()
-            .sorted(Comparator.comparing(ClinicRoom::getId))
             .map(this::toClinicRoomResponse)
             .toList();
     }
@@ -100,6 +127,26 @@ public class AdminCatalogService {
     }
 
     @Transactional(readOnly = true)
+    public PageResponse<DoctorResponse> listDoctors(
+        Long hospitalId,
+        Long roomId,
+        String workTimeSlot,
+        int page,
+        int size,
+        String keyword
+    ) {
+        Pageable pageable = buildPageable(page, size);
+        var doctorPage = doctorRepository.search(hospitalId, roomId, normalizeBlank(workTimeSlot), normalizeKeyword(keyword), pageable);
+        return new PageResponse<>(
+            doctorPage.getContent().stream().map(this::toDoctorResponse).toList(),
+            doctorPage.getTotalElements(),
+            doctorPage.getTotalPages(),
+            doctorPage.getNumber(),
+            doctorPage.getSize()
+        );
+    }
+
+    @Transactional(readOnly = true)
     public List<DoctorResponse> listDoctors(Long hospitalId, Long roomId) {
         List<Doctor> doctors;
         if (roomId != null) {
@@ -107,11 +154,10 @@ public class AdminCatalogService {
         } else if (hospitalId != null) {
             doctors = doctorRepository.findByHospitalId(hospitalId);
         } else {
-            doctors = doctorRepository.findAll();
+            doctors = doctorRepository.findAll(Sort.by(Sort.Direction.ASC, "id"));
         }
 
         return doctors.stream()
-            .sorted(Comparator.comparing(Doctor::getId))
             .map(this::toDoctorResponse)
             .toList();
     }
@@ -197,8 +243,8 @@ public class AdminCatalogService {
     }
 
     private HospitalResponse toHospitalResponse(Hospital hospital) {
-        long roomCount = clinicRoomRepository.findByHospitalId(hospital.getId()).size();
-        long doctorCount = doctorRepository.findByHospitalId(hospital.getId()).size();
+        long roomCount = clinicRoomRepository.countByHospitalId(hospital.getId());
+        long doctorCount = doctorRepository.countByHospitalId(hospital.getId());
 
         return new HospitalResponse(
             hospital.getId(),
@@ -215,7 +261,7 @@ public class AdminCatalogService {
     }
 
     private ClinicRoomResponse toClinicRoomResponse(ClinicRoom room) {
-        long doctorCount = doctorRepository.findByRoomId(room.getId()).size();
+        long doctorCount = doctorRepository.countByRoomId(room.getId());
 
         return new ClinicRoomResponse(
             room.getId(),
@@ -247,5 +293,22 @@ public class AdminCatalogService {
             doctor.getCreatedAt(),
             doctor.getUpdatedAt()
         );
+    }
+
+    private Pageable buildPageable(int page, int size) {
+        int normalizedPage = Math.max(page, 0);
+        int normalizedSize = Math.min(Math.max(size, 1), 100);
+        return PageRequest.of(normalizedPage, normalizedSize, Sort.by(Sort.Direction.ASC, "id"));
+    }
+
+    private String normalizeKeyword(String keyword) {
+        return keyword == null ? "" : keyword.trim();
+    }
+
+    private String normalizeBlank(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 }

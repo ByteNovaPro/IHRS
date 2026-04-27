@@ -1,0 +1,104 @@
+[
+  {
+    "id": "triage-tcm-symptom-match",
+    "text": "中医内科/治未病门诊适合失眠、乏力、体质调理、慢性疲劳、食欲差、情绪压力大和亚健康管理等偏长期调理诉求。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "中医内科/治未病门诊",
+      "department_aliases": "中医,中医内科,治未病,中医调理",
+      "tags": "失眠,乏力,调理,亚健康,体质,压力大,食欲差",
+      "symptom_tags": "失眠,乏力,疲劳,亚健康,体质调理,食欲差",
+      "scene_tags": "想调理身体,老是睡不好,总觉得累",
+      "intent_signals": "中医挂什么科,调理身体挂哪科,治未病门诊",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "symptom_match",
+      "priority": 7
+    }
+  },
+  {
+    "id": "triage-tcm-follow-up",
+    "text": "中医调理方向导诊时应追问持续时间、睡眠质量、食欲、大便情况、近期压力、月经情况以及是否已有明确西医诊断，以判断是否适合先做调理门诊。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "中医内科/治未病门诊",
+      "department_aliases": "中医,中医内科,治未病,中医调理",
+      "tags": "持续时间,睡眠质量,食欲,大便,压力状态,月经情况,西医诊断",
+      "symptom_tags": "失眠,乏力,压力大,食欲差,疲劳",
+      "scene_tags": "睡眠怎么样,最近压力大吗,吃得下吗,大便正常吗",
+      "intent_signals": "多久了,睡得好吗,食欲怎么样,有西医诊断吗",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "follow_up",
+      "priority": 7
+    }
+  },
+  {
+    "id": "triage-tcm-red-flags",
+    "text": "若伴明显胸痛、呼吸困难、急性神经症状、高热不退或其他突发重症表现，不建议仅做调理，应优先线下急性评估。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "中医内科/治未病门诊",
+      "department_aliases": "中医,中医内科,治未病,中医调理",
+      "tags": "胸痛,呼吸困难,急性神经症状,高热不退,突发重症",
+      "symptom_tags": "胸痛,呼吸困难,急性神经症状,高热",
+      "scene_tags": "不是调理能解决的,要不要急诊,危险信号",
+      "intent_signals": "严重吗,能不能只看中医,要不要急诊",
+      "urgency_level": "emergency",
+      "audience": "general",
+      "intent_type": "red_flag",
+      "priority": 11
+    }
+  },
+  {
+    "id": "triage-tcm-boundary-cases",
+    "text": "如果主要是不明原因乏力、失眠、食欲差、长期疲劳，且暂未见急性危险表现，可考虑中医调理；但若症状定位清楚、进展迅速或伴明确器质性风险，仍应优先专科或全科评估。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "中医内科/治未病门诊",
+      "department_aliases": "中医,中医内科,治未病,中医调理",
+      "tags": "乏力,失眠,食欲差,长期疲劳,器质性风险,专科评估",
+      "symptom_tags": "失眠,乏力,疲劳,食欲差,头晕",
+      "scene_tags": "该不该先看中医,中医还是内科,调理和看病怎么分",
+      "intent_signals": "挂中医还是内科,想调理身体看什么科,需不需要先专科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "boundary_cases",
+      "priority": 8
+    }
+  },
+  {
+    "id": "triage-tcm-recommendation-request",
+    "text": "如果用户直接提出想看中医、推荐调理类医生或预约治未病门诊，且诉求集中在睡眠差、乏力、体质调理、长期疲劳等问题，可优先走中医内科/治未病门诊。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "中医内科/治未病门诊",
+      "department_aliases": "中医,中医内科,治未病,中医调理",
+      "tags": "推荐医生,中医,调理,治未病,预约",
+      "symptom_tags": "失眠,乏力,疲劳,亚健康,体质调理",
+      "scene_tags": "推荐中医医生,调理挂号,预约治未病",
+      "intent_signals": "推荐中医医生,挂中医,预约调理门诊,治未病挂号",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "recommendation_request",
+      "priority": 8
+    }
+  },
+  {
+    "id": "triage-tcm-special-population",
+    "text": "长期熬夜、工作压力大、慢性疲劳、恢复期调理或希望进行季节性养生管理的人群，更适合中医内科/治未病门诊做连续性调理评估。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "中医内科/治未病门诊",
+      "department_aliases": "中医,中医内科,治未病,中医调理",
+      "tags": "熬夜,压力大,慢性疲劳,恢复期,养生管理",
+      "symptom_tags": "失眠,乏力,疲劳,压力大,亚健康",
+      "scene_tags": "总熬夜很累,想调理一下,恢复期养身体",
+      "intent_signals": "调理身体挂什么科,长期熬夜看中医吗,恢复期怎么调理",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "special_population",
+      "priority": 7
+    }
+  }
+]

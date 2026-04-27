@@ -1,0 +1,104 @@
+[
+  {
+    "id": "triage-cardiology-symptom-match",
+    "text": "心内诊室适合胸闷、胸痛、心悸、活动后气短、高血压波动、水肿等心血管相关不适，尤其适合需要先做门诊分诊和慢病评估的场景。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "心内诊室",
+      "department_aliases": "心内,心内科,心血管内科,心脏科",
+      "tags": "胸闷,胸痛,心悸,气短,高血压,水肿",
+      "symptom_tags": "胸闷,胸痛,心悸,活动后气短,高血压,心慌",
+      "scene_tags": "胸口闷,心慌,活动后喘,血压波动",
+      "intent_signals": "看什么科,挂心内科,胸闷挂哪个科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "symptom_match",
+      "priority": 10
+    }
+  },
+  {
+    "id": "triage-cardiology-follow-up",
+    "text": "心内方向导诊时应重点追问症状持续时间、是否活动后加重、是否伴大汗、恶心、头晕、夜间憋醒，以及既往高血压、冠心病或心律失常病史。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "心内诊室",
+      "department_aliases": "心内,心内科,心血管内科,心脏科",
+      "tags": "持续时间,活动后加重,大汗,头晕,夜间憋醒,既往病史",
+      "symptom_tags": "胸闷,胸痛,心悸,头晕,气短",
+      "scene_tags": "继续补充,补充病情,胸闷多久了,运动后加重吗",
+      "intent_signals": "多久,是否活动后加重,有没有冷汗,夜里会不会憋醒",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "follow_up",
+      "priority": 9
+    }
+  },
+  {
+    "id": "triage-cardiology-red-flags",
+    "text": "若出现剧烈胸痛、明显呼吸困难、意识异常、持续冷汗、胸痛向肩背放射或突然濒死感，应优先建议急诊，不宜只做普通门诊分流。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "心内诊室",
+      "department_aliases": "心内,心内科,心血管内科,心脏科",
+      "tags": "剧烈胸痛,呼吸困难,意识异常,冷汗,放射痛,濒死感",
+      "symptom_tags": "剧烈胸痛,呼吸困难,意识异常,胸痛放射",
+      "scene_tags": "危险信号,胸痛严重,要不要急诊,心梗风险",
+      "intent_signals": "严重吗,要不要急诊,会不会心梗,危险吗",
+      "urgency_level": "emergency",
+      "audience": "general",
+      "intent_type": "red_flag",
+      "priority": 12
+    }
+  },
+  {
+    "id": "triage-cardiology-boundary-cases",
+    "text": "若以胸闷胸痛为主，但同时伴咳嗽、发热或呼吸道感染表现，需要与呼吸诊室区分；若只是轻度乏力、低热、症状定位不清，也可先从全科/内科初诊进入。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "心内诊室",
+      "department_aliases": "心内,心内科,心血管内科,心脏科",
+      "tags": "胸闷胸痛,咳嗽,发热,定位不清,全科分流",
+      "symptom_tags": "胸闷,胸痛,咳嗽,发热,乏力",
+      "scene_tags": "和呼吸科怎么区分,是心脏还是肺,先挂全科还是心内",
+      "intent_signals": "挂心内还是呼吸,胸闷看哪个科,需不需要先全科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "boundary_cases",
+      "priority": 10
+    }
+  },
+  {
+    "id": "triage-cardiology-recommendation-request",
+    "text": "如果用户明确提出想挂心内科、推荐心脏方面医生，且症状集中在胸闷、胸痛、心慌、血压异常，可优先走心内诊室并进一步结合严重程度筛选医生与就诊时段。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "心内诊室",
+      "department_aliases": "心内,心内科,心血管内科,心脏科",
+      "tags": "挂号,推荐医生,心内科,心脏科,血压异常",
+      "symptom_tags": "胸闷,胸痛,心悸,血压高,心慌",
+      "scene_tags": "推荐医生,挂心内科,预约心脏专科",
+      "intent_signals": "推荐心内医生,挂心内科,看心脏挂什么科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "recommendation_request",
+      "priority": 11
+    }
+  },
+  {
+    "id": "triage-cardiology-special-population",
+    "text": "老年人、有高血压冠心病史、糖尿病、吸烟史或近期劳累后出现胸闷心慌时，即便症状不算特别剧烈，也应提高对心内方向的关注，必要时尽快线下评估。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "心内诊室",
+      "department_aliases": "心内,心内科,心血管内科,心脏科",
+      "tags": "老年人,高血压,冠心病,糖尿病,吸烟史,劳累后",
+      "symptom_tags": "胸闷,心慌,活动后气短,头晕",
+      "scene_tags": "老年人胸闷,有基础病,高危人群",
+      "intent_signals": "老人胸闷挂什么科,有高血压心慌,基础病患者",
+      "urgency_level": "soon",
+      "audience": "general",
+      "intent_type": "special_population",
+      "priority": 11
+    }
+  }
+]

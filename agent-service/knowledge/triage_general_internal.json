@@ -1,0 +1,104 @@
+[
+  {
+    "id": "triage-general-internal-symptom-match",
+    "text": "全科/内科初诊适合轻度发热、乏力、头痛、食欲差、全身不适等暂时无法明确定位到单一专科的常见症状，适合作为首诊兜底门诊。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "全科/内科初诊",
+      "department_aliases": "全科,内科,普通内科,综合内科,初诊",
+      "tags": "发热,乏力,头痛,食欲差,全身不适",
+      "symptom_tags": "发热,乏力,头痛,不舒服,没精神",
+      "scene_tags": "症状不明确,先看什么科,初步分诊,无法定位专科",
+      "intent_signals": "看什么科,挂号,先挂哪个科",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "symptom_match",
+      "priority": 11
+    }
+  },
+  {
+    "id": "triage-general-internal-follow-up",
+    "text": "全科/内科初诊导诊时应优先追问体温数值、症状持续多久、是否进行性加重、最主要的不适部位，以及是否伴有咳嗽、腹痛、皮疹、胸闷或尿频等表现。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "全科/内科初诊",
+      "department_aliases": "全科,内科,普通内科,综合内科,初诊",
+      "tags": "体温,持续多久,是否加重,主要不适,伴随症状",
+      "symptom_tags": "发热,乏力,头痛,咳嗽,腹痛,皮疹",
+      "scene_tags": "继续补充,补充症状,补充说明,二轮问答",
+      "intent_signals": "多久,几天,是否伴有,还有什么症状",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "follow_up",
+      "priority": 10
+    }
+  },
+  {
+    "id": "triage-general-internal-red-flags",
+    "text": "若发热持续不退且体温很高，或同时伴呼吸困难、意识异常、持续剧烈胸腹痛、明显脱水、反复呕吐等表现，应及时线下评估，必要时优先急诊。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "全科/内科初诊",
+      "department_aliases": "全科,内科,普通内科,综合内科,初诊",
+      "tags": "高热不退,呼吸困难,意识异常,剧烈胸腹痛,脱水,反复呕吐",
+      "symptom_tags": "高热,呼吸困难,意识异常,胸痛,腹痛,脱水",
+      "scene_tags": "危险信号,红旗症状,需要尽快处理",
+      "intent_signals": "严重吗,要不要急诊,危险吗",
+      "urgency_level": "soon",
+      "audience": "general",
+      "intent_type": "red_flag",
+      "priority": 13
+    }
+  },
+  {
+    "id": "triage-general-internal-boundary-cases",
+    "text": "当症状同时涉及发热、乏力、轻咳、腹部不适、皮疹、尿频等多个方向，或者患者只说“有点不舒服”“不知道哪里出问题”，可先走全科/内科初诊，由门诊进一步判断是否转专科。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "全科/内科初诊",
+      "department_aliases": "全科,内科,普通内科,综合内科,初诊",
+      "tags": "症状混杂,定位不清,多个方向,有点不舒服,先分诊",
+      "symptom_tags": "发热,乏力,轻咳,腹部不适,皮疹,尿频",
+      "scene_tags": "不知道挂哪个科,症状说不清,多个症状一起出现",
+      "intent_signals": "先挂全科吗,不知道看什么科,哪个科都像",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "boundary_cases",
+      "priority": 11
+    }
+  },
+  {
+    "id": "triage-general-internal-recommendation-request",
+    "text": "如果用户直接提出挂号、推荐医生或推荐医院诉求，但症状描述仍较模糊，可先按全科/内科初诊兜底，并继续追问主要症状、持续时间和是否加重后再细化到具体专科或医生。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "全科/内科初诊",
+      "department_aliases": "全科,内科,普通内科,综合内科,初诊",
+      "tags": "挂号,推荐医生,推荐医院,预约,推荐科室",
+      "symptom_tags": "症状不清,描述模糊,需要补充说明",
+      "scene_tags": "推荐医生,预约挂号,医院推荐,医生推荐",
+      "intent_signals": "挂号,预约,推荐医生,推荐医院,推荐科室",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "recommendation_request",
+      "priority": 12
+    }
+  },
+  {
+    "id": "triage-general-internal-special-population",
+    "text": "老年人、基础病较多的人群、近期正在用多种药物的患者，如果只是笼统描述乏力、食欲差、低热、头晕等，也更适合先从全科/内科初诊进入，避免漏掉系统性问题。",
+    "metadata": {
+      "type": "triage_chunk",
+      "department": "全科/内科初诊",
+      "department_aliases": "全科,内科,普通内科,综合内科,初诊",
+      "tags": "老年人,基础病多,多种用药,乏力,头晕,低热",
+      "symptom_tags": "乏力,头晕,食欲差,低热,全身不适",
+      "scene_tags": "老人不舒服,有基础病,全身性问题",
+      "intent_signals": "老人看什么科,基础病多挂哪科,全身不舒服怎么办",
+      "urgency_level": "normal",
+      "audience": "general",
+      "intent_type": "special_population",
+      "priority": 10
+    }
+  }
+]
